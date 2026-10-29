@@ -71,11 +71,23 @@ body {
 
 .modal-dialog .modal-content {
     background-color: #212529;
+    color: rgb(222, 226, 230);
 }
 
 .modal-dialog .modal-header,
 .modal-dialog .modal-footer {
     border-color: #495057;
+}
+
+.modal-dialog .close {
+    color: rgb(222, 226, 230);
+    text-shadow: none;
+    opacity: 0.8;
+}
+
+.modal-dialog .close:hover {
+    color: #ffffff;
+    opacity: 1;
 }
 
 .navbar-light .navbar-brand {
@@ -180,9 +192,12 @@ img[src="assets/icon-students.png"] {
 }
 
 .personal-area-header,
-.personal-area-search-panel,
 .personal-area-tabs {
     border-color: #495057;
+}
+
+.personal-area-tabs .nav-link {
+    color: rgba(222, 226, 230, 0.7);
 }
 
 .personal-area-tabs .nav-link.active {
@@ -193,12 +208,68 @@ img[src="assets/icon-students.png"] {
 
 .personal-area-tabs .nav-link:hover {
     border-color: #495057;
+    color: #ffffff;
 }
 
-.personal-area-container .list-group-item {
-    background-color: #2b3035;
-    border-color: #495057;
-    color: rgb(222, 226, 230);
+/* Friends list styles in dark mode (Personal Area, Event Friends modal, Course Friends modal) */
+.personal-area-container .list-group-item,
+.personal-area-search-panel .list-group-item,
+.event-friends-modal-container .list-group-item,
+.course-friends-modal-container .list-group-item {
+    background-color: #2b3035 !important;
+    border-color: #495057 !important;
+    color: rgb(222, 226, 230) !important;
+}
+
+.personal-area-container .list-group-item:hover,
+.personal-area-search-panel .list-group-item:hover,
+.event-friends-modal-container .list-group-item:hover,
+.course-friends-modal-container .list-group-item:hover {
+    background-color: #343a40 !important;
+}
+
+.event-friends-details-box,
+.course-friends-details-box {
+    background-color: #2b3035 !important;
+    border-color: #495057 !important;
+    color: rgb(222, 226, 230) !important;
+}
+
+.event-friends-title,
+.course-friends-title,
+.event-friends-name,
+.course-friends-name,
+.personal-area-person-name,
+.personal-area-username-line {
+    color: #ffffff !important;
+}
+
+.event-friends-subtitle,
+.event-friends-email,
+.course-friends-email,
+.personal-area-person-email,
+.personal-area-email-line,
+.personal-area-empty-state,
+.event-friends-empty,
+.course-friends-empty {
+    color: #adb5bd !important;
+}
+
+.course-friends-event-badge {
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+
+.personal-area-search-panel {
+    background-color: #2b3035 !important;
+    border-color: #495057 !important;
+}
+
+.personal-area-change-name-box {
+    background-color: rgba(13, 110, 253, 0.15) !important;
+    border-color: rgba(13, 110, 253, 0.4) !important;
+    color: rgb(222, 226, 230) !important;
 }
 
 

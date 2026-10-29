@@ -875,8 +875,8 @@ var CourseCalendar = (function () {
         var modalContent = $('<div class="event-friends-modal-container"></div>');
 
         // Event details header
-        var detailsBox = $('<div class="p-3 mb-3 rounded border bg-light"></div>');
-        detailsBox.append($('<div class="font-weight-bold text-dark mb-1"></div>').text(courseTitle));
+        var detailsBox = $('<div class="event-friends-details-box p-3 mb-3 rounded border"></div>');
+        detailsBox.append($('<div class="event-friends-title font-weight-bold mb-1"></div>').text(courseTitle));
 
         var parts = [];
         parts.push(lessonType + ' ' + lessonNumber);
@@ -899,23 +899,23 @@ var CourseCalendar = (function () {
                 parts.push(teachers);
             }
         }
-        detailsBox.append($('<div class="text-muted small"></div>').text(parts.join(' | ')));
+        detailsBox.append($('<div class="event-friends-subtitle small"></div>').text(parts.join(' | ')));
         modalContent.append(detailsBox);
 
         // Friends list
         var friends = (eventFriendData && eventFriendData.friends) || [];
         if (friends.length === 0) {
-            modalContent.append($('<div class="text-center text-muted py-3">אין חברים באירוע זה.</div>'));
+            modalContent.append($('<div class="event-friends-empty text-center py-3">אין חברים באירוע זה.</div>'));
         } else {
             var friendsList = $('<div class="list-group"></div>');
             friends.forEach(function (f) {
-                var item = $('<div class="list-group-item d-flex align-items-center py-2 px-3"></div>');
+                var item = $('<div class="list-group-item event-friends-item d-flex align-items-center py-2 px-3"></div>');
                 item.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
 
                 var infoDiv = $('<div></div>');
-                infoDiv.append($('<div class="font-weight-bold text-dark"></div>').text(f.username || f.displayName || 'חבר'));
+                infoDiv.append($('<div class="event-friends-name font-weight-bold"></div>').text(f.username || f.displayName || 'חבר'));
                 if (f.email) {
-                    infoDiv.append($('<div class="text-muted small"></div>').text(f.email));
+                    infoDiv.append($('<div class="event-friends-email small"></div>').text(f.email));
                 }
                 item.append(infoDiv);
                 friendsList.append(item);

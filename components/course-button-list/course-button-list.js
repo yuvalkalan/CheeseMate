@@ -840,24 +840,24 @@ var CourseButtonList = (function () {
 
         var modalContent = $('<div class="course-friends-modal-container"></div>');
 
-        var detailsBox = $('<div class="p-3 mb-3 rounded border bg-light"></div>');
-        detailsBox.append($('<div class="font-weight-bold text-dark"></div>').text(courseTitle));
+        var detailsBox = $('<div class="course-friends-details-box p-3 mb-3 rounded border"></div>');
+        detailsBox.append($('<div class="course-friends-title font-weight-bold"></div>').text(courseTitle));
         modalContent.append(detailsBox);
 
         var friends = friendData.friends || [];
         if (friends.length === 0) {
-            modalContent.append($('<div class="text-center text-muted py-3">אין חברים שרשומים לאותם אירועים איתך בקורס זה.</div>'));
+            modalContent.append($('<div class="course-friends-empty text-center py-3">אין חברים שרשומים לאותם אירועים איתך בקורס זה.</div>'));
         } else {
             var friendsList = $('<div class="list-group"></div>');
             friends.forEach(function (f) {
-                var item = $('<div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
+                var item = $('<div class="list-group-item course-friends-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
 
                 var leftSide = $('<div class="d-flex align-items-center"></div>');
                 leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
                 var nameBox = $('<div></div>');
-                nameBox.append($('<div class="font-weight-bold text-dark"></div>').text(f.username || f.displayName || 'חבר'));
+                nameBox.append($('<div class="course-friends-name font-weight-bold"></div>').text(f.username || f.displayName || 'חבר'));
                 if (f.email) {
-                    nameBox.append($('<div class="text-muted small"></div>').text(f.email));
+                    nameBox.append($('<div class="course-friends-email small"></div>').text(f.email));
                 }
                 leftSide.append(nameBox);
                 item.append(leftSide);
@@ -865,7 +865,7 @@ var CourseButtonList = (function () {
                 if (f.events && f.events.length > 0) {
                     var badgesWrap = $('<div></div>');
                     f.events.forEach(function (evText) {
-                        badgesWrap.append($('<span class="badge badge-primary ml-1"></span>').text(evText));
+                        badgesWrap.append($('<span class="badge badge-primary course-friends-event-badge ml-1"></span>').text(evText));
                     });
                     item.append(badgesWrap);
                 }

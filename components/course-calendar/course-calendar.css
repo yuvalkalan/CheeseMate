@@ -136,3 +136,35 @@
 .course-calendar .custom-event {
     cursor: move;
 }
+
+/* Event friends modal styles */
+.event-friends-details-box {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.event-friends-title {
+    color: #212529;
+}
+
+.event-friends-subtitle {
+    color: #6c757d;
+}
+
+.event-friends-item {
+    background-color: #ffffff;
+    border-color: #dee2e6;
+    color: #212529;
+}
+
+.event-friends-name {
+    color: #212529;
+}
+
+.event-friends-email {
+    color: #6c757d;
+}
+
+.event-friends-empty {
+    color: #6c757d;
+}

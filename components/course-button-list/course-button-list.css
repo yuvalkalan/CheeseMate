@@ -225,3 +225,36 @@
     color: rgba(220, 53, 69, 1);
     transform: scale(1.1);
 }
+
+/* Course friends modal styles */
+.course-friends-details-box {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.course-friends-title {
+    color: #212529;
+}
+
+.course-friends-item {
+    background-color: #ffffff;
+    border-color: #dee2e6;
+    color: #212529;
+}
+
+.course-friends-name {
+    color: #212529;
+}
+
+.course-friends-email {
+    color: #6c757d;
+}
+
+.course-friends-empty {
+    color: #6c757d;
+}
+
+.course-friends-event-badge {
+    font-size: 80%;
+    padding: 0.35em 0.55em;
+}
