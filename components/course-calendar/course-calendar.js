@@ -984,7 +984,7 @@ var CourseCalendar = (function () {
             }
         }
 
-        if (event.courseNumber !== null && that.eventFriendCounts && !event.temporary) {
+        if (event.courseNumber !== null && that.eventFriendCounts) {
             var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
             var eventFriendData = that.eventFriendCounts[eventKey];
             if (eventFriendData && eventFriendData.count > 0) {
@@ -1192,6 +1192,8 @@ var CourseCalendar = (function () {
     CourseCalendar.prototype.unpreviewCourse = function (course) {
         var that = this;
         var calendar = that.element;
+
+        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
 
         var removed = 0;
 

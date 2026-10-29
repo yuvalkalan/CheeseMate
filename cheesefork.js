@@ -1057,15 +1057,13 @@
                         'חבר';
                     var profile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(uid) : null) || {};
 
-                    var userCourses = currentSavedSession && currentSavedSession[semesterCoursesKey];
-                    if (Array.isArray(userCourses)) {
-                        userCourses.forEach(function (course) {
+                    // 1. Record friend for all events/lessons they take in any course (for selected, unselected, and previewed options)
+                    var friendCourses = data[semesterCoursesKey];
+                    if (Array.isArray(friendCourses)) {
+                        friendCourses.forEach(function (course) {
                             var courseKey = currentSemester + '_' + course;
-                            var myCourseSelections = currentSavedSession[courseKey] || {};
                             var friendCourseSelections = data[courseKey];
-
                             if (friendCourseSelections && typeof friendCourseSelections === 'object') {
-                                // 1. Record friend for all events/lessons they take in this course (for selected and unselected calendar badges)
                                 Object.keys(friendCourseSelections).forEach(function (lessonType) {
                                     var friendLessonNum = friendCourseSelections[lessonType];
                                     if (friendLessonNum !== undefined && friendLessonNum !== null && friendLessonNum !== '-') {
@@ -1082,8 +1080,19 @@
                                         });
                                     }
                                 });
+                            }
+                        });
+                    }
 
-                                // 2. Track shared events between current user and friend (for course button badge)
+                    // 2. Track shared events between current user and friend in user's courses (for course button badge)
+                    var userCourses = currentSavedSession && currentSavedSession[semesterCoursesKey];
+                    if (Array.isArray(userCourses)) {
+                        userCourses.forEach(function (course) {
+                            var courseKey = currentSemester + '_' + course;
+                            var myCourseSelections = currentSavedSession[courseKey] || {};
+                            var friendCourseSelections = data[courseKey];
+
+                            if (friendCourseSelections && typeof friendCourseSelections === 'object') {
                                 var sharedLessonTypes = [];
                                 Object.keys(myCourseSelections).forEach(function (lessonType) {
                                     var myLessonNum = myCourseSelections[lessonType];
