@@ -24,7 +24,7 @@ var CourseCalendar = (function () {
 
         element.addClass('course-calendar').fullCalendar({
             defaultDate: '2017-01-01',
-            //editable: true,
+            editable: false,
             //eventLimit: true, // allow "more" link when too many events
             defaultView: 'agendaWeek',
             header: false,
@@ -491,6 +491,7 @@ var CourseCalendar = (function () {
             backgroundColor: courseCalendar.colorGenerator(course),
             textColor: 'white',
             borderColor: 'white',
+            editable: false,
             className: 'calendar-item-course-' + course +
                 ' calendar-item-course-' + course + '-type-' + lessonType +
                 ' calendar-item-course-' + course + '-lesson-' + lesson['מס.'],
@@ -651,6 +652,10 @@ var CourseCalendar = (function () {
     }
 
     function onCustomEventMoveResize(event) {
+        if (event.courseNumber !== null) {
+            return;
+        }
+
         var that = this;
         var calendar = that.element;
 
@@ -1161,7 +1166,8 @@ var CourseCalendar = (function () {
                 courseNumber: conf.courseNumber,
                 lessonData: conf.lessonData,
                 selected: conf.selected,
-                temporary: true
+                temporary: true,
+                editable: false
             };
 
             temporaryEvents.push(temp);
@@ -1349,7 +1355,12 @@ var CourseCalendar = (function () {
         var that = this;
         that.readonly = !!readonly;
         that.element.fullCalendar('option', 'selectable', !that.readonly);
-        that.element.fullCalendar('option', 'editable', !that.readonly);
+        that.element.fullCalendar('option', 'editable', false);
+        that.element.fullCalendar('clientEvents', function (ev) {
+            if (ev.courseNumber === null) {
+                ev.editable = !that.readonly;
+            }
+        });
         that.element.fullCalendar('rerenderEvents');
     };
 
