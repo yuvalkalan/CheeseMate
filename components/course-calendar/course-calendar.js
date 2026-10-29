@@ -866,6 +866,76 @@ var CourseCalendar = (function () {
         this.onCourseHoverOut(event.courseNumber);
     }
 
+    function showEventFriendsModal(courseCalendar, event, eventFriendData) {
+        var courseNumber = event.courseNumber;
+        var lessonType = getEventLessonType(event);
+        var lessonNumber = event.lessonData ? event.lessonData['מס.'] : '';
+        var courseTitle = courseCalendar.courseManager.getTitle(courseNumber);
+
+        var modalContent = $('<div class="event-friends-modal-container"></div>');
+
+        // Event details header
+        var detailsBox = $('<div class="p-3 mb-3 rounded border bg-light"></div>');
+        detailsBox.append($('<div class="font-weight-bold text-dark mb-1"></div>').text(courseTitle));
+
+        var parts = [];
+        parts.push(lessonType + ' ' + lessonNumber);
+        if (event.lessonData) {
+            if (event.lessonData['יום']) {
+                parts.push('יום ' + event.lessonData['יום']);
+            }
+            if (event.lessonData['שעה']) {
+                parts.push(event.lessonData['שעה']);
+            }
+            if (event.lessonData['בניין']) {
+                var place = event.lessonData['בניין'];
+                if (event.lessonData['חדר']) {
+                    place += ' ' + event.lessonData['חדר'];
+                }
+                parts.push(place);
+            }
+            if (event.lessonData['מרצה/מתרגל']) {
+                var teachers = event.lessonData['מרצה/מתרגל'].split('\n').join(', ');
+                parts.push(teachers);
+            }
+        }
+        detailsBox.append($('<div class="text-muted small"></div>').text(parts.join(' | ')));
+        modalContent.append(detailsBox);
+
+        // Friends list
+        var friends = (eventFriendData && eventFriendData.friends) || [];
+        if (friends.length === 0) {
+            modalContent.append($('<div class="text-center text-muted py-3">אין חברים באירוע זה.</div>'));
+        } else {
+            var friendsList = $('<div class="list-group"></div>');
+            friends.forEach(function (f) {
+                var item = $('<div class="list-group-item d-flex align-items-center py-2 px-3"></div>');
+                item.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
+
+                var infoDiv = $('<div></div>');
+                infoDiv.append($('<div class="font-weight-bold text-dark"></div>').text(f.username || f.displayName || 'חבר'));
+                if (f.email) {
+                    infoDiv.append($('<div class="text-muted small"></div>').text(f.email));
+                }
+                item.append(infoDiv);
+                friendsList.append(item);
+            });
+            modalContent.append(friendsList);
+        }
+
+        BootstrapDialog.show({
+            title: $('<span class="d-flex align-items-center"><i class="fas fa-heart text-danger ml-2"></i> חברים באירוע זה (' + friends.length + ')</span>'),
+            message: modalContent,
+            buttons: [{
+                label: 'סגור',
+                cssClass: 'btn-secondary',
+                action: function (dialog) {
+                    dialog.close();
+                }
+            }]
+        });
+    }
+
     function afterEventRender(event, element) {
         var that = this;
 
@@ -890,8 +960,8 @@ var CourseCalendar = (function () {
                         }
                     }
                     var tooltipText = (eventFriendData.count === 1) ?
-                        ('חבר אחד איתך באירוע זה' + namesSuffix) :
-                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix);
+                        ('חבר אחד איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
+                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
 
                     var badge = $('<span class="calendar-item-friend-badge">' +
                         '<i class="fas fa-heart"></i> ' +
@@ -906,6 +976,9 @@ var CourseCalendar = (function () {
                         })
                         .click(function (e) {
                             e.stopPropagation();
+                            e.preventDefault();
+                            badge.tooltip('hide');
+                            showEventFriendsModal(that, event, eventFriendData);
                         });
                     element.append(badge);
                 }

@@ -54,9 +54,9 @@ var CourseButtonList = (function () {
             return 'אין חברים באותם אירועים בקורס זה';
         }
         if (count === 1) {
-            return 'חבר אחד באותם אירועים בקורס זה' + namesSuffix;
+            return 'חבר אחד באותם אירועים בקורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
         }
-        return count + ' חברים באותם אירועים בקורס זה' + namesSuffix;
+        return count + ' חברים באותם אירועים בקורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
     }
 
     function getStudentCountTooltipText(count) {
@@ -353,6 +353,9 @@ var CourseButtonList = (function () {
             })
             .click(function (e) {
                 e.stopPropagation();
+                e.preventDefault();
+                friendCountBadge.tooltip('hide');
+                that.showCourseFriendsModal(course);
             });
 
         var color = that.colorGenerator(course);
@@ -827,6 +830,61 @@ var CourseButtonList = (function () {
             var tooltipText = getFriendCountTooltipText(count, names);
             countBadge.attr('data-original-title', tooltipText)
                 .prop('title', tooltipText);
+        });
+    };
+
+    CourseButtonList.prototype.showCourseFriendsModal = function (course) {
+        var that = this;
+        var friendData = that.courseFriendCounts[course] || { count: 0, names: [], friends: [] };
+        var courseTitle = that.courseManager.getTitle(course);
+
+        var modalContent = $('<div class="course-friends-modal-container"></div>');
+
+        var detailsBox = $('<div class="p-3 mb-3 rounded border bg-light"></div>');
+        detailsBox.append($('<div class="font-weight-bold text-dark"></div>').text(courseTitle));
+        modalContent.append(detailsBox);
+
+        var friends = friendData.friends || [];
+        if (friends.length === 0) {
+            modalContent.append($('<div class="text-center text-muted py-3">אין חברים שרשומים לאותם אירועים איתך בקורס זה.</div>'));
+        } else {
+            var friendsList = $('<div class="list-group"></div>');
+            friends.forEach(function (f) {
+                var item = $('<div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
+
+                var leftSide = $('<div class="d-flex align-items-center"></div>');
+                leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
+                var nameBox = $('<div></div>');
+                nameBox.append($('<div class="font-weight-bold text-dark"></div>').text(f.username || f.displayName || 'חבר'));
+                if (f.email) {
+                    nameBox.append($('<div class="text-muted small"></div>').text(f.email));
+                }
+                leftSide.append(nameBox);
+                item.append(leftSide);
+
+                if (f.events && f.events.length > 0) {
+                    var badgesWrap = $('<div></div>');
+                    f.events.forEach(function (evText) {
+                        badgesWrap.append($('<span class="badge badge-primary ml-1"></span>').text(evText));
+                    });
+                    item.append(badgesWrap);
+                }
+
+                friendsList.append(item);
+            });
+            modalContent.append(friendsList);
+        }
+
+        BootstrapDialog.show({
+            title: $('<span class="d-flex align-items-center"><i class="fas fa-heart text-danger ml-2"></i> חברים באותם אירועים בקורס (' + friends.length + ')</span>'),
+            message: modalContent,
+            buttons: [{
+                label: 'סגור',
+                cssClass: 'btn-secondary',
+                action: function (dialog) {
+                    dialog.close();
+                }
+            }]
         });
     };
 

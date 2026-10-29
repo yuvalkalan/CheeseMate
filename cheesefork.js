@@ -1026,6 +1026,7 @@
                     var friendName = (personalArea && personalArea.getFriendDisplayName ? personalArea.getFriendDisplayName(uid) : null) ||
                         data.displayName ||
                         'חבר';
+                    var profile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(uid) : null) || {};
 
                     var userCourses = currentSavedSession && currentSavedSession[semesterCoursesKey];
                     if (Array.isArray(userCourses)) {
@@ -1037,7 +1038,7 @@
                             if (myCourseSelections && typeof myCourseSelections === 'object' &&
                                 friendCourseSelections && typeof friendCourseSelections === 'object') {
 
-                                var sharedAny = false;
+                                var sharedLessonTypes = [];
                                 Object.keys(myCourseSelections).forEach(function (lessonType) {
                                     var myLessonNum = myCourseSelections[lessonType];
                                     var friendLessonNum = friendCourseSelections[lessonType];
@@ -1045,21 +1046,31 @@
                                         friendLessonNum !== undefined && friendLessonNum !== null &&
                                         String(myLessonNum) === String(friendLessonNum)) {
 
-                                        sharedAny = true;
+                                        sharedLessonTypes.push(lessonType + ' ' + myLessonNum);
                                         var eventKey = course + '.' + lessonType + '.' + myLessonNum;
                                         if (!eventFriendsMap[eventKey]) {
-                                            eventFriendsMap[eventKey] = { count: 0, names: [] };
+                                            eventFriendsMap[eventKey] = { count: 0, names: [], friends: [] };
                                         }
                                         eventFriendsMap[eventKey].count++;
                                         eventFriendsMap[eventKey].names.push(friendName);
+                                        eventFriendsMap[eventKey].friends.push({
+                                            uid: uid,
+                                            username: friendName,
+                                            email: profile.email || ''
+                                        });
                                     }
                                 });
 
-                                if (sharedAny) {
+                                if (sharedLessonTypes.length > 0) {
                                     if (!courseFriendMap[course]) {
                                         courseFriendMap[course] = {};
                                     }
-                                    courseFriendMap[course][uid] = friendName;
+                                    courseFriendMap[course][uid] = {
+                                        uid: uid,
+                                        username: friendName,
+                                        email: profile.email || '',
+                                        events: sharedLessonTypes
+                                    };
                                 }
                             }
                         });
@@ -1073,12 +1084,15 @@
             var friendObj = courseFriendMap[course];
             var uids = Object.keys(friendObj);
             var names = [];
+            var friendsList = [];
             uids.forEach(function (fUid) {
-                names.push(friendObj[fUid]);
+                names.push(friendObj[fUid].username);
+                friendsList.push(friendObj[fUid]);
             });
             courseFriendCounts[course] = {
                 count: uids.length,
-                names: names
+                names: names,
+                friends: friendsList
             };
         });
 
