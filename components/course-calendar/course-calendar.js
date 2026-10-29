@@ -968,43 +968,6 @@ var CourseCalendar = (function () {
 
         if (event.selected) {
             element.addClass('calendar-item-selected');
-
-            if (event.courseNumber !== null && that.eventFriendCounts) {
-                var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
-                var eventFriendData = that.eventFriendCounts[eventKey];
-                if (eventFriendData && eventFriendData.count > 0) {
-                    var namesSuffix = '';
-                    if (eventFriendData.names && eventFriendData.names.length > 0) {
-                        if (eventFriendData.names.length <= 3) {
-                            namesSuffix = ': ' + eventFriendData.names.join(', ');
-                        } else {
-                            namesSuffix = ': ' + eventFriendData.names.slice(0, 3).join(', ') + ' ועוד ' + (eventFriendData.names.length - 3);
-                        }
-                    }
-                    var tooltipText = (eventFriendData.count === 1) ?
-                        ('חבר אחד איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
-                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
-
-                    var badge = $('<span class="calendar-item-friend-badge">' +
-                        '<i class="fas fa-heart"></i> ' +
-                        '<span class="calendar-item-friend-badge-count">' + eventFriendData.count + '</span>' +
-                        '</span>');
-                    badge.prop('title', tooltipText)
-                        .attr('data-toggle', 'tooltip')
-                        .tooltip({
-                            placement: 'top',
-                            trigger: 'hover',
-                            container: 'body'
-                        })
-                        .click(function (e) {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            badge.tooltip('hide');
-                            showEventFriendsModal(that, event, eventFriendData);
-                        });
-                    element.append(badge);
-                }
-            }
         } else {
             element.addClass('calendar-item-unselected');
 
@@ -1018,6 +981,50 @@ var CourseCalendar = (function () {
                 if (!this.readonly && !event.temporary) {
                     element.append('<div class="calendar-item-unselected-hide-button">הסתר</div>');
                 }
+            }
+        }
+
+        if (event.courseNumber !== null && that.eventFriendCounts && !event.temporary) {
+            var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
+            var eventFriendData = that.eventFriendCounts[eventKey];
+            if (eventFriendData && eventFriendData.count > 0) {
+                var namesSuffix = '';
+                if (eventFriendData.names && eventFriendData.names.length > 0) {
+                    if (eventFriendData.names.length <= 3) {
+                        namesSuffix = ': ' + eventFriendData.names.join(', ');
+                    } else {
+                        namesSuffix = ': ' + eventFriendData.names.slice(0, 3).join(', ') + ' ועוד ' + (eventFriendData.names.length - 3);
+                    }
+                }
+                var tooltipText;
+                if (event.selected) {
+                    tooltipText = (eventFriendData.count === 1) ?
+                        ('חבר אחד איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
+                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
+                } else {
+                    tooltipText = (eventFriendData.count === 1) ?
+                        ('חבר אחד באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
+                        (eventFriendData.count + ' חברים באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
+                }
+
+                var badge = $('<span class="calendar-item-friend-badge">' +
+                    '<i class="fas fa-heart"></i> ' +
+                    '<span class="calendar-item-friend-badge-count">' + eventFriendData.count + '</span>' +
+                    '</span>');
+                badge.prop('title', tooltipText)
+                    .attr('data-toggle', 'tooltip')
+                    .tooltip({
+                        placement: 'top',
+                        trigger: 'hover',
+                        container: 'body'
+                    })
+                    .click(function (e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        badge.tooltip('hide');
+                        showEventFriendsModal(that, event, eventFriendData);
+                    });
+                element.append(badge);
             }
         }
     }

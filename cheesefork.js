@@ -1061,22 +1061,15 @@
                     if (Array.isArray(userCourses)) {
                         userCourses.forEach(function (course) {
                             var courseKey = currentSemester + '_' + course;
-                            var myCourseSelections = currentSavedSession[courseKey];
+                            var myCourseSelections = currentSavedSession[courseKey] || {};
                             var friendCourseSelections = data[courseKey];
 
-                            if (myCourseSelections && typeof myCourseSelections === 'object' &&
-                                friendCourseSelections && typeof friendCourseSelections === 'object') {
-
-                                var sharedLessonTypes = [];
-                                Object.keys(myCourseSelections).forEach(function (lessonType) {
-                                    var myLessonNum = myCourseSelections[lessonType];
+                            if (friendCourseSelections && typeof friendCourseSelections === 'object') {
+                                // 1. Record friend for all events/lessons they take in this course (for selected and unselected calendar badges)
+                                Object.keys(friendCourseSelections).forEach(function (lessonType) {
                                     var friendLessonNum = friendCourseSelections[lessonType];
-                                    if (myLessonNum !== undefined && myLessonNum !== null &&
-                                        friendLessonNum !== undefined && friendLessonNum !== null &&
-                                        String(myLessonNum) === String(friendLessonNum)) {
-
-                                        sharedLessonTypes.push(lessonType + ' ' + myLessonNum);
-                                        var eventKey = course + '.' + lessonType + '.' + myLessonNum;
+                                    if (friendLessonNum !== undefined && friendLessonNum !== null && friendLessonNum !== '-') {
+                                        var eventKey = course + '.' + lessonType + '.' + friendLessonNum;
                                         if (!eventFriendsMap[eventKey]) {
                                             eventFriendsMap[eventKey] = { count: 0, names: [], friends: [] };
                                         }
@@ -1087,6 +1080,18 @@
                                             username: friendName,
                                             email: profile.email || ''
                                         });
+                                    }
+                                });
+
+                                // 2. Track shared events between current user and friend (for course button badge)
+                                var sharedLessonTypes = [];
+                                Object.keys(myCourseSelections).forEach(function (lessonType) {
+                                    var myLessonNum = myCourseSelections[lessonType];
+                                    var friendLessonNum = friendCourseSelections[lessonType];
+                                    if (myLessonNum !== undefined && myLessonNum !== null && myLessonNum !== '-' &&
+                                        friendLessonNum !== undefined && friendLessonNum !== null && friendLessonNum !== '-' &&
+                                        String(myLessonNum) === String(friendLessonNum)) {
+                                        sharedLessonTypes.push(lessonType + ' ' + myLessonNum);
                                     }
                                 });
 
