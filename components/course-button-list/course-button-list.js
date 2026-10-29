@@ -38,6 +38,25 @@ var CourseButtonList = (function () {
 
         that.infoDialogs = [];
         that.courseStudentCounts = {};
+        that.courseFriendCounts = {};
+    }
+
+    function getFriendCountTooltipText(count, names) {
+        var namesSuffix = '';
+        if (names && names.length > 0) {
+            if (names.length <= 3) {
+                namesSuffix = ': ' + names.join(', ');
+            } else {
+                namesSuffix = ': ' + names.slice(0, 3).join(', ') + ' ועוד ' + (names.length - 3);
+            }
+        }
+        if (!count || count <= 0) {
+            return 'אין חברים באותם אירועים בקורס זה';
+        }
+        if (count === 1) {
+            return 'חבר אחד באותם אירועים בקורס זה' + namesSuffix;
+        }
+        return count + ' חברים באותם אירועים בקורס זה' + namesSuffix;
     }
 
     function getStudentCountTooltipText(count) {
@@ -318,6 +337,24 @@ var CourseButtonList = (function () {
             .click(function (e) {
                 e.stopPropagation();
             });
+
+        var initialFriendData = that.courseFriendCounts[course] || { count: 0, names: [] };
+        var initialFriendCount = typeof initialFriendData === 'object' ? (initialFriendData.count || 0) : (initialFriendData || 0);
+        var initialFriendNames = typeof initialFriendData === 'object' ? (initialFriendData.names || []) : [];
+        var friendCountBadge = $('<span class="badge badge-danger float-right course-friend-count-badge">' +
+            '<i class="fas fa-heart course-friend-count-icon"></i> ' +
+            '<span class="course-friend-count-value">' + initialFriendCount + '</span>' +
+            '</span>');
+        friendCountBadge.prop('title', getFriendCountTooltipText(initialFriendCount, initialFriendNames))
+            .attr('data-toggle', 'tooltip')
+            .tooltip({
+                placement: 'top',
+                trigger: 'hover'
+            })
+            .click(function (e) {
+                e.stopPropagation();
+            });
+
         var color = that.colorGenerator(course);
         button.css('background-color', color)
             .click(function () {
@@ -333,7 +370,7 @@ var CourseButtonList = (function () {
                 $(this).removeClass('course-button-list-item-hovered');
                 that.onHoverOut(course);
             })
-            .append(dragHandle, spanAbsolute, spanBoldHidden, badge, studentCountBadge);
+            .append(dragHandle, spanAbsolute, spanBoldHidden, badge, studentCountBadge, friendCountBadge);
 
         // Add tooltip to badge.
         var courseDescriptionHtml = that.courseManager.getDescription(course, {html: true});
@@ -770,6 +807,24 @@ var CourseButtonList = (function () {
             var countBadge = item.find('.course-student-count-badge');
             countBadge.find('.course-student-count-value').text(count);
             var tooltipText = getStudentCountTooltipText(count);
+            countBadge.attr('data-original-title', tooltipText)
+                .prop('title', tooltipText);
+        });
+    };
+
+    CourseButtonList.prototype.setCourseFriendCounts = function (countsMap) {
+        var that = this;
+        that.courseFriendCounts = countsMap || {};
+
+        that.badgeContainer.find('li.list-group-item').each(function () {
+            var item = $(this);
+            var course = item.attr('data-course-number');
+            var friendData = that.courseFriendCounts[course] || { count: 0, names: [] };
+            var count = typeof friendData === 'object' ? (friendData.count || 0) : (friendData || 0);
+            var names = typeof friendData === 'object' ? (friendData.names || []) : [];
+            var countBadge = item.find('.course-friend-count-badge');
+            countBadge.find('.course-friend-count-value').text(count);
+            var tooltipText = getFriendCountTooltipText(count, names);
             countBadge.attr('data-original-title', tooltipText)
                 .prop('title', tooltipText);
         });

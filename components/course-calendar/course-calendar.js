@@ -18,6 +18,7 @@ var CourseCalendar = (function () {
         this.onCustomEventAdded = options.onCustomEventAdded;
         this.onCustomEventUpdated = options.onCustomEventUpdated;
         this.onCustomEventRemoved = options.onCustomEventRemoved;
+        this.eventFriendCounts = {};
 
         var that = this;
 
@@ -875,6 +876,40 @@ var CourseCalendar = (function () {
 
         if (event.selected) {
             element.addClass('calendar-item-selected');
+
+            if (event.courseNumber !== null && that.eventFriendCounts) {
+                var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
+                var eventFriendData = that.eventFriendCounts[eventKey];
+                if (eventFriendData && eventFriendData.count > 0) {
+                    var namesSuffix = '';
+                    if (eventFriendData.names && eventFriendData.names.length > 0) {
+                        if (eventFriendData.names.length <= 3) {
+                            namesSuffix = ': ' + eventFriendData.names.join(', ');
+                        } else {
+                            namesSuffix = ': ' + eventFriendData.names.slice(0, 3).join(', ') + ' ועוד ' + (eventFriendData.names.length - 3);
+                        }
+                    }
+                    var tooltipText = (eventFriendData.count === 1) ?
+                        ('חבר אחד איתך באירוע זה' + namesSuffix) :
+                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix);
+
+                    var badge = $('<span class="calendar-item-friend-badge">' +
+                        '<i class="fas fa-heart"></i> ' +
+                        '<span class="calendar-item-friend-badge-count">' + eventFriendData.count + '</span>' +
+                        '</span>');
+                    badge.prop('title', tooltipText)
+                        .attr('data-toggle', 'tooltip')
+                        .tooltip({
+                            placement: 'top',
+                            trigger: 'hover',
+                            container: 'body'
+                        })
+                        .click(function (e) {
+                            e.stopPropagation();
+                        });
+                    element.append(badge);
+                }
+            }
         } else {
             element.addClass('calendar-item-unselected');
 
@@ -1203,10 +1238,18 @@ var CourseCalendar = (function () {
         return count;
     };
 
+    CourseCalendar.prototype.setEventFriendCounts = function (countsMap) {
+        var that = this;
+        that.eventFriendCounts = countsMap || {};
+        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
+        that.element.fullCalendar('rerenderEvents');
+    };
+
     CourseCalendar.prototype.removeAll = function () {
         var that = this;
         var calendar = that.element;
 
+        calendar.find('.calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
         calendar.fullCalendar('removeEvents');
 
         updateCalendarMaxDayAndTime(calendar);

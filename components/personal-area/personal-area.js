@@ -9,6 +9,7 @@ var PersonalArea = (function () {
         this.onBeforeAccountDelete = options.onBeforeAccountDelete || function () {};
         this.onUsernameChanged = options.onUsernameChanged || function () {};
         this.onIncomingRequestsCountChanged = options.onIncomingRequestsCountChanged || function () {};
+        this.onFriendsChanged = options.onFriendsChanged || function () {};
 
         this.currentUser = null;
         this.userDocData = null;
@@ -95,8 +96,14 @@ var PersonalArea = (function () {
             var incoming = Array.isArray(data.incomingRequests) ? data.incomingRequests : [];
             that.onIncomingRequestsCountChanged(incoming.length);
 
+            var friends = Array.isArray(data.friends) ? data.friends : [];
+            that.onFriendsChanged(friends);
+
             that.loadReferencedProfiles(function () {
                 that.refreshDialogContent();
+                if (that.userDocData) {
+                    that.onFriendsChanged(Array.isArray(that.userDocData.friends) ? that.userDocData.friends : []);
+                }
             });
         });
     };
@@ -109,6 +116,7 @@ var PersonalArea = (function () {
         this.currentUser = null;
         this.userDocData = null;
         this.onIncomingRequestsCountChanged(0);
+        this.onFriendsChanged([]);
     };
 
     PersonalArea.prototype.loadReferencedProfiles = function (callback) {
@@ -376,6 +384,11 @@ var PersonalArea = (function () {
             username: username,
             email: profile.email || ''
         };
+    };
+
+    PersonalArea.prototype.getFriendDisplayName = function (uid) {
+        var profile = this.getProfileInfo(uid);
+        return profile ? profile.username : uid;
     };
 
     PersonalArea.prototype.buildFriendsTabElement = function () {

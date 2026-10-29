@@ -967,6 +967,9 @@
                 } else {
                     badge.addClass('d-none');
                 }
+            },
+            onFriendsChanged: function () {
+                recomputeCourseStudentCounts();
             }
         });
 
@@ -974,39 +977,116 @@
     }
 
     function recomputeCourseStudentCounts() {
-        if (!lastSemesterDocsSnapshot || !courseButtonList) {
+        if (!courseButtonList) {
             return;
         }
 
         var excludedUid = scheduleSharingUserId ||
             (typeof firebase !== 'undefined' && firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
         var semesterCoursesKey = currentSemester + '_courses';
-        var countsMap = {};
+        var studentCountsMap = {};
         var seenUserCourse = {};
 
-        lastSemesterDocsSnapshot.forEach(function (doc) {
-            if (doc.id !== currentSemester) {
-                return;
-            }
-            var userDocRef = doc.ref.parent && doc.ref.parent.parent;
-            var uid = userDocRef ? userDocRef.id : null;
-            if (!uid || uid === excludedUid) {
-                return;
-            }
-            var data = doc.data() || {};
-            var courses = data[semesterCoursesKey];
-            if (Array.isArray(courses)) {
-                courses.forEach(function (course) {
-                    var key = uid + '_' + course;
-                    if (!seenUserCourse[key]) {
-                        seenUserCourse[key] = true;
-                        countsMap[course] = (countsMap[course] || 0) + 1;
-                    }
-                });
+        var friendsList = (personalArea && personalArea.userDocData && Array.isArray(personalArea.userDocData.friends)) ?
+            personalArea.userDocData.friends : [];
+        var friendsMap = {};
+        friendsList.forEach(function (fUid) {
+            if (fUid) {
+                friendsMap[fUid] = true;
             }
         });
 
-        courseButtonList.setCourseStudentCounts(countsMap);
+        var courseFriendMap = {};
+        var eventFriendsMap = {};
+
+        if (lastSemesterDocsSnapshot) {
+            lastSemesterDocsSnapshot.forEach(function (doc) {
+                if (doc.id !== currentSemester) {
+                    return;
+                }
+                var userDocRef = doc.ref.parent && doc.ref.parent.parent;
+                var uid = userDocRef ? userDocRef.id : null;
+                if (!uid || uid === excludedUid) {
+                    return;
+                }
+                var data = doc.data() || {};
+                var courses = data[semesterCoursesKey];
+                if (Array.isArray(courses)) {
+                    courses.forEach(function (course) {
+                        var key = uid + '_' + course;
+                        if (!seenUserCourse[key]) {
+                            seenUserCourse[key] = true;
+                            studentCountsMap[course] = (studentCountsMap[course] || 0) + 1;
+                        }
+                    });
+                }
+
+                // If this user is a friend of the logged-in user
+                if (friendsMap[uid]) {
+                    var friendName = (personalArea && personalArea.getFriendDisplayName ? personalArea.getFriendDisplayName(uid) : null) ||
+                        data.displayName ||
+                        'חבר';
+
+                    var userCourses = currentSavedSession && currentSavedSession[semesterCoursesKey];
+                    if (Array.isArray(userCourses)) {
+                        userCourses.forEach(function (course) {
+                            var courseKey = currentSemester + '_' + course;
+                            var myCourseSelections = currentSavedSession[courseKey];
+                            var friendCourseSelections = data[courseKey];
+
+                            if (myCourseSelections && typeof myCourseSelections === 'object' &&
+                                friendCourseSelections && typeof friendCourseSelections === 'object') {
+
+                                var sharedAny = false;
+                                Object.keys(myCourseSelections).forEach(function (lessonType) {
+                                    var myLessonNum = myCourseSelections[lessonType];
+                                    var friendLessonNum = friendCourseSelections[lessonType];
+                                    if (myLessonNum !== undefined && myLessonNum !== null &&
+                                        friendLessonNum !== undefined && friendLessonNum !== null &&
+                                        String(myLessonNum) === String(friendLessonNum)) {
+
+                                        sharedAny = true;
+                                        var eventKey = course + '.' + lessonType + '.' + myLessonNum;
+                                        if (!eventFriendsMap[eventKey]) {
+                                            eventFriendsMap[eventKey] = { count: 0, names: [] };
+                                        }
+                                        eventFriendsMap[eventKey].count++;
+                                        eventFriendsMap[eventKey].names.push(friendName);
+                                    }
+                                });
+
+                                if (sharedAny) {
+                                    if (!courseFriendMap[course]) {
+                                        courseFriendMap[course] = {};
+                                    }
+                                    courseFriendMap[course][uid] = friendName;
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        }
+
+        var courseFriendCounts = {};
+        Object.keys(courseFriendMap).forEach(function (course) {
+            var friendObj = courseFriendMap[course];
+            var uids = Object.keys(friendObj);
+            var names = [];
+            uids.forEach(function (fUid) {
+                names.push(friendObj[fUid]);
+            });
+            courseFriendCounts[course] = {
+                count: uids.length,
+                names: names
+            };
+        });
+
+        courseButtonList.setCourseStudentCounts(studentCountsMap);
+        courseButtonList.setCourseFriendCounts(courseFriendCounts);
+        if (courseCalendar && courseCalendar.setEventFriendCounts) {
+            courseCalendar.setEventFriendCounts(eventFriendsMap);
+        }
     }
 
     function watchCourseStudentCounts() {
@@ -1701,6 +1781,8 @@
         courseCalendar.loadSavedSchedule(schedule, customEvents);
         updateGeneralInfoLine();
         courseExamInfo.renderCourses(courseButtonList.getCourseNumbers(true));
+        currentSavedSession = session;
+        recomputeCourseStudentCounts();
 
         if (restoreScrollPosition) {
             $(window).scrollTop(scrollTop); // restore scroll position
@@ -1725,6 +1807,7 @@
     function onSavedSessionChange() {
         $('#top-navbar-undo').removeClass('d-none');
         $('#top-navbar-redo').addClass('d-none');
+        recomputeCourseStudentCounts();
     }
 
     function makeUndo() {
@@ -1735,6 +1818,7 @@
 
         $('#top-navbar-undo').addClass('d-none');
         $('#top-navbar-redo').removeClass('d-none');
+        recomputeCourseStudentCounts();
     }
 
     function makeRedo() {
@@ -1745,6 +1829,7 @@
 
         $('#top-navbar-redo').addClass('d-none');
         $('#top-navbar-undo').removeClass('d-none');
+        recomputeCourseStudentCounts();
     }
 
     function firestoreAuthenticatedUserDoc() {
