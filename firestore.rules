@@ -1,0 +1,253 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: users
+// Document ID: {userId} (Firebase Auth UID)
+// Fields:
+//   - uid: string or null (optional, max 128 chars) - user's Firebase Auth UID
+//   - displayName: string or null (optional, max 200 chars) - public display name for shared schedules
+//   - username: string or null (optional, max 200 chars) - user's chosen username in Personal Area
+//   - usernameLower: string or null (optional, max 200 chars) - lowercase username for case-insensitive lookup
+//   - email: string or null (optional, max 254 chars) - user's email address for friend lookup
+//   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
+//   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
+//   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
+//   - <semester>_courses: list of strings (optional) - ordered course numbers for legacy semesters (201701-201801)
+//   - <semester>_<courseId>: map (optional) - selected lesson groups for a course
+//   - <semester>_custom_events: map (optional) - user-defined custom schedule events
+//   - <semester>_metadata_<courseId>: map (optional) - cached course metadata for diff detection
+//
+// Subcollection: users/{userId}/semesters
+// Document ID: {semesterId} (e.g. "202601")
+// Fields:
+//   - displayName: string or null (optional, max 200 chars) - public display name for shared schedules
+//   - <semester>_courses: list of strings (optional) - ordered course numbers for the semester
+//   - <semester>_<courseId>: map (optional) - selected lesson groups for a course
+//   - <semester>_custom_events: map (optional) - user-defined custom schedule events
+//   - <semester>_metadata_<courseId>: map (optional) - cached course metadata for diff detection
+//
+// Collection: courseFeedback
+// Document ID: {courseId} (course number, e.g. "02340118")
+// Fields:
+//   - posts: list of maps (required, max 1000 items) - append-only list of course reviews
+//     Each post map contains:
+//       - timestamp: number (required, positive)
+//       - author: string (required, 1..200 chars)
+//       - semester: string (required, 1..20 chars)
+//       - text: string (required, 1..20000 chars)
+//       - difficultyRank: number (required, 1..5)
+//       - generalRank: number (required, 1..5)
+//
+// Collection: courseFeedbackReports
+// Document ID: {courseId} (course number, e.g. "02340118")
+// Fields:
+//   - posts: list of maps (required, max 1000 items) - append-only list of abuse reports (private to maintainers)
+//     Each report map contains:
+//       - timestamp: number (required, positive)
+//       - email: string (required, valid email format, max 254 chars)
+//       - reason: string (required, 1..5000 chars)
+//       - postTimestamp: number (required, positive)
+//       - postText: string (required, max 20000 chars)
+//       - postAuthor: string (required, max 200 chars)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the resource (for user-owned documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user is owner based on document's uid field
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    // Verify UID hasn't been tampered with on create
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    // Validate required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() <= 254 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate that a list is a list and enforces size limits
+    function isValidList(list, maxSize) {
+      return list is list && list.size() >= 1 && list.size() <= maxSize;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validate user/semester schedule and profile document (supports dynamic course and semester field keys)
+    function isValidScheduleDoc(data) {
+      return data.keys().size() <= 500 &&
+        (!('uid' in data) ||
+         data.uid == null ||
+         (data.uid is string && data.uid.size() <= 128)) &&
+        (!('displayName' in data) ||
+         data.displayName == null ||
+         (data.displayName is string && data.displayName.size() <= 200)) &&
+        (!('username' in data) ||
+         data.username == null ||
+         (data.username is string && data.username.size() <= 200)) &&
+        (!('usernameLower' in data) ||
+         data.usernameLower == null ||
+         (data.usernameLower is string && data.usernameLower.size() <= 200)) &&
+        (!('email' in data) ||
+         data.email == null ||
+         (data.email is string && data.email.size() <= 254)) &&
+        (!('friends' in data) ||
+         (data.friends is list && data.friends.size() <= 500)) &&
+        (!('incomingRequests' in data) ||
+         (data.incomingRequests is list && data.incomingRequests.size() <= 500)) &&
+        (!('outgoingRequests' in data) ||
+         (data.outgoingRequests is list && data.outgoingRequests.size() <= 500));
+    }
+
+    // Validate a single course feedback post entry
+    function isValidFeedbackPost(post) {
+      return post is map &&
+        post.keys().hasOnly(['timestamp', 'author', 'semester', 'text', 'difficultyRank', 'generalRank']) &&
+        post.keys().hasAll(['timestamp', 'author', 'semester', 'text', 'difficultyRank', 'generalRank']) &&
+        post.timestamp is number && post.timestamp > 0 &&
+        post.author is string && post.author.size() >= 1 && post.author.size() <= 200 &&
+        post.semester is string && post.semester.size() >= 1 && post.semester.size() <= 20 &&
+        post.text is string && post.text.size() >= 1 && post.text.size() <= 20000 &&
+        post.difficultyRank is number && post.difficultyRank >= 1 && post.difficultyRank <= 5 &&
+        post.generalRank is number && post.generalRank >= 1 && post.generalRank <= 5;
+    }
+
+    // Validate courseFeedback document
+    function isValidCourseFeedback(data) {
+      return hasOnlyAllowedFields(['posts']) &&
+        hasRequiredFields(['posts']) &&
+        isValidList(data.posts, 1000) &&
+        isValidFeedbackPost(data.posts[data.posts.size() - 1]);
+    }
+
+    // Validate a single course feedback abuse report entry
+    function isValidReportPost(post) {
+      return post is map &&
+        post.keys().hasOnly(['timestamp', 'email', 'reason', 'postTimestamp', 'postText', 'postAuthor']) &&
+        post.keys().hasAll(['timestamp', 'email', 'reason', 'postTimestamp', 'postText', 'postAuthor']) &&
+        post.timestamp is number && post.timestamp > 0 &&
+        isValidEmail(post.email) &&
+        post.reason is string && post.reason.size() >= 1 && post.reason.size() <= 5000 &&
+        post.postTimestamp is number && post.postTimestamp > 0 &&
+        post.postText is string && post.postText.size() <= 20000 &&
+        post.postAuthor is string && post.postAuthor.size() <= 200;
+    }
+
+    // Validate courseFeedbackReports document
+    function isValidCourseFeedbackReport(data) {
+      return hasOnlyAllowedFields(['posts']) &&
+        hasRequiredFields(['posts']) &&
+        isValidList(data.posts, 1000) &&
+        isValidReportPost(data.posts[data.posts.size() - 1]);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // User profile, friends list, and schedule documents (legacy semesters 201701-201801) + semester subcollections
+    match /users/{userId} {
+      // Single-document reads are public to support schedule sharing links (?uid=<userId>)
+      allow get: if true;
+      // Authenticated users can search users by email/username to send friend requests
+      allow list: if isAuthenticated();
+
+      allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
+      allow update: if (
+        isOwner(userId) ||
+        (isAuthenticated() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']))
+      ) && isValidScheduleDoc(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      match /semesters/{semesterId} {
+        allow get: if true;
+        allow list: if false;
+
+        allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
+        allow update: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Publicly readable course feedback, append-only for authenticated users
+    match /courseFeedback/{courseId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if isAuthenticated() &&
+        isValidCourseFeedback(request.resource.data) &&
+        request.resource.data.posts.size() == 1;
+
+      allow update: if isAuthenticated() &&
+        isValidCourseFeedback(request.resource.data) &&
+        request.resource.data.posts.size() == resource.data.posts.size() + 1 &&
+        request.resource.data.posts.hasAll(resource.data.posts);
+
+      allow delete: if false;
+    }
+
+    // Private abuse reports for course feedback, append-only for visitors
+    match /courseFeedbackReports/{courseId} {
+      allow read: if false;
+
+      allow create: if isValidCourseFeedbackReport(request.resource.data) &&
+        request.resource.data.posts.size() == 1;
+
+      allow update: if isValidCourseFeedbackReport(request.resource.data) &&
+        request.resource.data.posts.size() == resource.data.posts.size() + 1 &&
+        request.resource.data.posts.hasAll(resource.data.posts);
+
+      allow delete: if false;
+    }
+
+    // Default deny for all other collections and documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

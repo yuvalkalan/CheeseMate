@@ -1,0 +1,49 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json",
+    "database": "(default)",
+    "location": "me-west1"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "CheeseMate",
+        "supportEmail": "yuvalkalan@gmail.com",
+        "authorizedRedirectUris": [
+          "https://cheesemate-yk.firebaseapp.com/__/auth/handler",
+          "https://cheesemate-yk.web.app/__/auth/handler",
+          "http://localhost:8000"
+        ]
+      }
+    }
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      "**/.*",
+      "**/node_modules/**",
+      "ci/**",
+      "package.json",
+      "package-lock.json",
+      "eslint.config.mjs",
+      "netlify.toml",
+      "CNAME"
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(html|js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  }
+}
