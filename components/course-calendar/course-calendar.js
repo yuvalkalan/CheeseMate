@@ -923,8 +923,9 @@ var CourseCalendar = (function () {
 
                 var doView = function () {
                     $('.modal').modal('hide');
-                    if (window.cheeseForkViewFriendSchedule && f.uid) {
-                        window.cheeseForkViewFriendSchedule(f.uid, friendName);
+                    var viewFn = window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule;
+                    if (viewFn && f.uid) {
+                        viewFn(f.uid, friendName);
                     }
                 };
                 leftSide.click(doView);

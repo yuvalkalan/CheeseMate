@@ -423,8 +423,9 @@ var PersonalArea = (function () {
                 if (that.dialog) {
                     that.dialog.close();
                 }
-                if (window.cheeseForkViewFriendSchedule && friend.uid) {
-                    window.cheeseForkViewFriendSchedule(friend.uid, friend.username);
+                var viewFn = window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule;
+                if (viewFn && friend.uid) {
+                    viewFn(friend.uid, friend.username);
                 }
             };
             details.click(doView);

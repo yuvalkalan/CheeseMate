@@ -137,7 +137,7 @@ var CourseFeedback = (function () {
                 // Pages without a login flow of their own point at one that has it.
                 (options.loginUrl
                     ? '<br>' +
-                        '<a href="' + options.loginUrl + '" target="_blank">התחברו באתר CheeseFork</a>' +
+                        '<a href="' + options.loginUrl + '" target="_blank">התחברו באתר CheeseMate</a>' +
                         ' ולאחר מכן רעננו עמוד זה.'
                     : '') +
             '</div>');

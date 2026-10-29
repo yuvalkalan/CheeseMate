@@ -1,4 +1,4 @@
-# CheeseFork
+# CheeseMate
 
 ![logo](logo.png)
 
