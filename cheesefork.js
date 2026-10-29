@@ -12,6 +12,8 @@
     var viewingSharedSchedule = false;
     var previewingFromSelectControl = null;
     var stopScheduleWatching = null;
+    var stopCourseStudentCountsWatching = null;
+    var lastSemesterDocsSnapshot = null;
     var currentSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
     var metadataDiff = {};
 
@@ -945,6 +947,9 @@
                 if (stopScheduleWatching) {
                     stopScheduleWatching();
                 }
+                if (stopCourseStudentCountsWatching) {
+                    stopCourseStudentCountsWatching();
+                }
             },
             onUsernameChanged: function (username) {
                 var tooltipText = 'מחובר בתור: ' + firestoreDisplayNameDecode(username);
@@ -957,13 +962,64 @@
             },
             onIncomingRequestsCountChanged: function (count) {
                 var badge = $('#top-navbar-personal-area .unread-count-badge');
-                if (count > 0) {
+                if ( count > 0) {
                     badge.text(count).removeClass('d-none');
                 } else {
                     badge.addClass('d-none');
                 }
             }
         });
+
+        watchCourseStudentCounts();
+    }
+
+    function recomputeCourseStudentCounts() {
+        if (!lastSemesterDocsSnapshot || !courseButtonList) {
+            return;
+        }
+
+        var excludedUid = scheduleSharingUserId ||
+            (typeof firebase !== 'undefined' && firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
+        var semesterCoursesKey = currentSemester + '_courses';
+        var countsMap = {};
+        var seenUserCourse = {};
+
+        lastSemesterDocsSnapshot.forEach(function (doc) {
+            if (doc.id !== currentSemester) {
+                return;
+            }
+            var userDocRef = doc.ref.parent && doc.ref.parent.parent;
+            var uid = userDocRef ? userDocRef.id : null;
+            if (!uid || uid === excludedUid) {
+                return;
+            }
+            var data = doc.data() || {};
+            var courses = data[semesterCoursesKey];
+            if (Array.isArray(courses)) {
+                courses.forEach(function (course) {
+                    var key = uid + '_' + course;
+                    if (!seenUserCourse[key]) {
+                        seenUserCourse[key] = true;
+                        countsMap[course] = (countsMap[course] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        courseButtonList.setCourseStudentCounts(countsMap);
+    }
+
+    function watchCourseStudentCounts() {
+        if (!firestoreDb) {
+            return;
+        }
+        if (stopCourseStudentCountsWatching) {
+            stopCourseStudentCountsWatching();
+        }
+        stopCourseStudentCountsWatching = firestoreDb.collectionGroup('semesters').onSnapshot(function (snapshot) {
+            lastSemesterDocsSnapshot = snapshot;
+            recomputeCourseStudentCounts();
+        }, function () {});
     }
 
     function firebaseAuthUIInit(onInitialized) {
@@ -1045,12 +1101,14 @@
             if (personalArea) {
                 personalArea.onUserSignedIn(user);
             }
+            recomputeCourseStudentCounts();
         }
 
         function handleSignedOutUser() {
             if (personalArea) {
                 personalArea.stopWatching();
             }
+            recomputeCourseStudentCounts();
             $('#top-navbar-personal-area').addClass('d-none');
             $('#top-navbar-logout').addClass('d-none');
             $('#top-navbar-login').removeClass('d-none');

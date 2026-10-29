@@ -22,7 +22,7 @@ rules_version = '2';
 //   - <semester>_custom_events: map (optional) - user-defined custom schedule events
 //   - <semester>_metadata_<courseId>: map (optional) - cached course metadata for diff detection
 //
-// Subcollection: users/{userId}/semesters
+// Subcollection: users/{userId}/semesters (and collectionGroup 'semesters')
 // Document ID: {semesterId} (e.g. "202601")
 // Fields:
 //   - displayName: string or null (optional, max 200 chars) - public display name for shared schedules
@@ -189,12 +189,15 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
+    // Allow collectionGroup('semesters') queries for counting students per course
+    match /{path=**}/semesters/{semesterId} {
+      allow get, list: if true;
+    }
+
     // User profile, friends list, and schedule documents (legacy semesters 201701-201801) + semester subcollections
     match /users/{userId} {
-      // Single-document reads are public to support schedule sharing links (?uid=<userId>)
-      allow get: if true;
-      // Authenticated users can search users by email/username to send friend requests
-      allow list: if isAuthenticated();
+      // Reads and queries are public to support schedule sharing links (?uid=<userId>), friend search, and course student counts
+      allow get, list: if true;
 
       allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
       allow update: if (
@@ -205,8 +208,7 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
 
       match /semesters/{semesterId} {
-        allow get: if true;
-        allow list: if false;
+        allow get, list: if true;
 
         allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
         allow update: if isOwner(userId) && isValidScheduleDoc(request.resource.data);

@@ -76,6 +76,18 @@
     padding: 0 .75em;
 }
 
+.course-student-count-badge {
+    margin-left: 4px;
+    padding: 0.35em 0.55em;
+    font-size: 85%;
+    background-color: rgba(0, 0, 0, 0.45);
+    color: #fff;
+}
+
+.course-student-count-icon {
+    font-size: 90%;
+}
+
 /* Fix tooltip arrow direction */
 .tooltip[x-placement^=left] .arrow-fix-placement {
     right: 0;

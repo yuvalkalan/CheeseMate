@@ -37,6 +37,17 @@ var CourseButtonList = (function () {
         }
 
         that.infoDialogs = [];
+        that.courseStudentCounts = {};
+    }
+
+    function getStudentCountTooltipText(count) {
+        if (!count || count <= 0) {
+            return 'אין סטודנטים נוספים שלוקחים קורס זה בסמסטר הנוכחי';
+        }
+        if (count === 1) {
+            return 'סטודנט נוסף אחד לוקח קורס זה בסמסטר הנוכחי';
+        }
+        return count + ' סטודנטים נוספים לוקחים קורס זה בסמסטר הנוכחי';
     }
 
     function makeWhatsappGroupLinkContent(data) {
@@ -293,6 +304,20 @@ var CourseButtonList = (function () {
         var badge = $('<span class="badge badge-secondary float-right">' +
             '<span class="course-button-list-badge-text">i</span>' +
             '</span>');
+        var initialStudentCount = that.courseStudentCounts[course] || 0;
+        var studentCountBadge = $('<span class="badge badge-dark float-right course-student-count-badge">' +
+            '<i class="fas fa-user-friends course-student-count-icon"></i> ' +
+            '<span class="course-student-count-value">' + initialStudentCount + '</span>' +
+            '</span>');
+        studentCountBadge.prop('title', getStudentCountTooltipText(initialStudentCount))
+            .attr('data-toggle', 'tooltip')
+            .tooltip({
+                placement: 'top',
+                trigger: 'hover'
+            })
+            .click(function (e) {
+                e.stopPropagation();
+            });
         var color = that.colorGenerator(course);
         button.css('background-color', color)
             .click(function () {
@@ -308,7 +333,7 @@ var CourseButtonList = (function () {
                 $(this).removeClass('course-button-list-item-hovered');
                 that.onHoverOut(course);
             })
-            .append(dragHandle, spanAbsolute, spanBoldHidden, badge);
+            .append(dragHandle, spanAbsolute, spanBoldHidden, badge, studentCountBadge);
 
         // Add tooltip to badge.
         var courseDescriptionHtml = that.courseManager.getDescription(course, {html: true});
@@ -732,6 +757,22 @@ var CourseButtonList = (function () {
         });
 
         return courseNumbers;
+    };
+
+    CourseButtonList.prototype.setCourseStudentCounts = function (countsMap) {
+        var that = this;
+        that.courseStudentCounts = countsMap || {};
+
+        that.badgeContainer.find('li.list-group-item').each(function () {
+            var item = $(this);
+            var course = item.attr('data-course-number');
+            var count = that.courseStudentCounts[course] || 0;
+            var countBadge = item.find('.course-student-count-badge');
+            countBadge.find('.course-student-count-value').text(count);
+            var tooltipText = getStudentCountTooltipText(count);
+            countBadge.attr('data-original-title', tooltipText)
+                .prop('title', tooltipText);
+        });
     };
 
     CourseButtonList.prototype.clear = function () {
