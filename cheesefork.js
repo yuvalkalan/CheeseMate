@@ -1510,11 +1510,11 @@
                 $('#sharing-user-name').text(displayName);
                 $('#sharing-user-known').removeClass('d-none');
                 $('#sharing-user-unknown').addClass('d-none');
-                document.title = displayName + ' - CheeseMate - Your Cheesy Scheduler';
+                document.title = displayName + ' - CheeseMate - CheeseFork With Friends';
             } else {
                 $('#sharing-user-unknown').removeClass('d-none');
                 $('#sharing-user-known').addClass('d-none');
-                document.title = 'CheeseMate - Your Cheesy Scheduler';
+                document.title = 'CheeseMate - CheeseFork With Friends';
             }
 
             if (!firstDataLoaded) {
@@ -1609,7 +1609,7 @@
         courseButtonList.setReadonly(false);
         courseCalendar.setReadonly(false);
 
-        document.title = 'CheeseMate - Your Cheesy Scheduler';
+        document.title = 'CheeseMate - CheeseFork With Friends';
 
         if (!isPopState) {
             try {
