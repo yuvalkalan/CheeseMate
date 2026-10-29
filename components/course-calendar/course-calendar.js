@@ -868,8 +868,6 @@ var CourseCalendar = (function () {
 
     function showEventFriendsModal(courseCalendar, event, eventFriendData) {
         var courseNumber = event.courseNumber;
-        var lessonType = getEventLessonType(event);
-        var lessonNumber = event.lessonData ? event.lessonData['מס.'] : '';
         var courseTitle = courseCalendar.courseManager.getTitle(courseNumber);
 
         var modalContent = $('<div class="event-friends-modal-container"></div>');
@@ -879,7 +877,6 @@ var CourseCalendar = (function () {
         detailsBox.append($('<div class="event-friends-title font-weight-bold mb-1"></div>').text(courseTitle));
 
         var parts = [];
-        parts.push(lessonType + ' ' + lessonNumber);
         if (event.lessonData) {
             if (event.lessonData['יום']) {
                 parts.push('יום ' + event.lessonData['יום']);
@@ -899,7 +896,9 @@ var CourseCalendar = (function () {
                 parts.push(teachers);
             }
         }
-        detailsBox.append($('<div class="event-friends-subtitle small"></div>').text(parts.join(' | ')));
+        if (parts.length > 0) {
+            detailsBox.append($('<div class="event-friends-subtitle small"></div>').text(parts.join(' | ')));
+        }
         modalContent.append(detailsBox);
 
         // Friends list
