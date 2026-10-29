@@ -50,15 +50,15 @@
     <link rel="stylesheet" href="modules/intro.js/introjs-rtl.min.css">
     <link rel="stylesheet" href="loader.css">
     <link rel="stylesheet" href="components/course-select/course-select.css">
-    <link rel="stylesheet" href="components/course-button-list/course-button-list.css?v=6">
+    <link rel="stylesheet" href="components/course-button-list/course-button-list.css?v=8">
     <link rel="stylesheet" href="components/course-exam-info/course-exam-info.css">
-    <link rel="stylesheet" href="components/course-calendar/course-calendar.css?v=6">
+    <link rel="stylesheet" href="components/course-calendar/course-calendar.css?v=8">
     <link rel="stylesheet" href="components/course-feedback/course-feedback.css">
     <link rel="stylesheet" href="components/histogram-browser/histogram-browser.css">
-    <link rel="stylesheet" href="components/personal-area/personal-area.css?v=6">
-    <link rel="stylesheet" href="cheesefork.css?v=6">
+    <link rel="stylesheet" href="components/personal-area/personal-area.css?v=8">
+    <link rel="stylesheet" href="cheesefork.css?v=8">
     <noscript id="dark-mode-toggle-stylesheets">
-        <link rel="stylesheet" href="cheesefork-dark.css?v=6" media="(prefers-color-scheme: dark)">
+        <link rel="stylesheet" href="cheesefork-dark.css?v=8" media="(prefers-color-scheme: dark)">
     </noscript>
     <script src="dark-mode-toggle-stylesheets-loader.min.js"></script>
     <link rel="stylesheet" href="cheesefork-print.css" media="print">
@@ -163,6 +163,16 @@
             <span class="font-weight-bold">CheeseFork</span>
         </a>
     </nav>
+
+    <div id="friend-schedule-banner" class="alert alert-info justify-content-between align-items-center py-2 px-3 mb-2" role="alert" style="display: none;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-eye ml-2 text-primary"></i>
+            <span>צפייה במערכת של <strong><span id="friend-schedule-banner-name"></span></strong> <span class="badge badge-secondary mr-2">לקריאה בלבד</span></span>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="friend-schedule-banner-return-btn">
+            <i class="fas fa-home ml-1"></i> חזרה למערכת שלי
+        </button>
+    </div>
 
     <div id="content-container" class="row">
         <div id="right-content-bar" class="col-md-2 my-2 my-md-0 invisible">
@@ -451,13 +461,13 @@
     })();
 </script>
 <script src="components/course-select/course-select.js"></script>
-<script src="components/course-button-list/course-button-list.js?v=7"></script>
+<script src="components/course-button-list/course-button-list.js?v=8"></script>
 <script src="components/course-exam-info/course-exam-info.js"></script>
-<script src="components/course-calendar/course-calendar.js?v=6"></script>
+<script src="components/course-calendar/course-calendar.js?v=8"></script>
 <script src="components/course-feedback/course-feedback.js"></script>
 <script src="components/histogram-browser/histogram-browser.js"></script>
-<script src="components/personal-area/personal-area.js?v=6"></script>
+<script src="components/personal-area/personal-area.js?v=8"></script>
 <script src="course-manager.js"></script>
-<script src="cheesefork.js?v=6"></script>
+<script src="cheesefork.js?v=8"></script>
 </body>
 </html>

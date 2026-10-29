@@ -909,15 +909,32 @@ var CourseCalendar = (function () {
         } else {
             var friendsList = $('<div class="list-group"></div>');
             friends.forEach(function (f) {
-                var item = $('<div class="list-group-item event-friends-item d-flex align-items-center py-2 px-3"></div>');
-                item.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
+                var item = $('<div class="list-group-item event-friends-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
+
+                var friendName = f.username || f.displayName || 'חבר';
+                var leftSide = $('<div class="d-flex align-items-center" style="cursor: pointer;" title="לחץ לצפייה במערכת של ' + friendName + '"></div>');
+                leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
 
                 var infoDiv = $('<div></div>');
-                infoDiv.append($('<div class="event-friends-name font-weight-bold"></div>').text(f.username || f.displayName || 'חבר'));
+                infoDiv.append($('<div class="event-friends-name font-weight-bold"></div>').text(friendName));
                 if (f.email) {
                     infoDiv.append($('<div class="event-friends-email small"></div>').text(f.email));
                 }
-                item.append(infoDiv);
+                leftSide.append(infoDiv);
+
+                var doView = function () {
+                    $('.modal').modal('hide');
+                    if (window.cheeseForkViewFriendSchedule && f.uid) {
+                        window.cheeseForkViewFriendSchedule(f.uid, friendName);
+                    }
+                };
+                leftSide.click(doView);
+
+                var viewBtn = $('<button type="button" class="btn btn-sm btn-outline-primary">' +
+                    '<i class="fas fa-calendar-alt ml-1"></i> צפה במערכת' +
+                    '</button>').click(doView);
+
+                item.append(leftSide, viewBtn);
                 friendsList.append(item);
             });
             modalContent.append(friendsList);
@@ -1326,6 +1343,14 @@ var CourseCalendar = (function () {
         calendar.fullCalendar('removeEvents');
 
         updateCalendarMaxDayAndTime(calendar);
+    };
+
+    CourseCalendar.prototype.setReadonly = function (readonly) {
+        var that = this;
+        that.readonly = !!readonly;
+        that.element.fullCalendar('option', 'selectable', !that.readonly);
+        that.element.fullCalendar('option', 'editable', !that.readonly);
+        that.element.fullCalendar('rerenderEvents');
     };
 
     return CourseCalendar;

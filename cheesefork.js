@@ -10,6 +10,8 @@
     var firestoreDb = null;
     var firebaseStorage = null;
     var viewingSharedSchedule = false;
+    var viewingFriendUid = null;
+    var viewingFriendName = null;
     var previewingFromSelectControl = null;
     var stopScheduleWatching = null;
     var stopCourseStudentCountsWatching = null;
@@ -924,6 +926,33 @@
                     }
                 });
         });
+
+        $('#top-navbar-home').click(function (event) {
+            if (viewingFriendUid) {
+                event.preventDefault();
+                returnToOwnSchedule();
+            }
+        });
+
+        $('#friend-schedule-banner-return-btn').click(function (event) {
+            event.preventDefault();
+            returnToOwnSchedule();
+        });
+
+        $('.navbar-brand').click(function (event) {
+            if (viewingFriendUid) {
+                event.preventDefault();
+                returnToOwnSchedule();
+            }
+        });
+
+        window.addEventListener('popstate', function (event) {
+            if (event.state && event.state.viewingFriend) {
+                watchFriendSchedule(event.state.viewingFriend, event.state.friendName, true);
+            } else if (viewingFriendUid) {
+                returnToOwnSchedule(true);
+            }
+        });
     }
 
     function firebaseInit() {
@@ -981,7 +1010,7 @@
             return;
         }
 
-        var excludedUid = scheduleSharingUserId ||
+        var excludedUid = viewingFriendUid || scheduleSharingUserId ||
             (typeof firebase !== 'undefined' && firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
         var semesterCoursesKey = currentSemester + '_courses';
         var studentCountsMap = {};
@@ -1472,7 +1501,7 @@
         var firstDataLoaded = false;
 
         var doc = firestoreUserDoc(scheduleSharingUserId);
-        doc.onSnapshot(function (result) {
+        stopScheduleWatching = doc.onSnapshot(function (result) {
             var session = result.exists ? savedSessionFromFirestoreData(result.data()) : {};
             setScheduleFromSavedSession(session, !firstDataLoaded);
 
@@ -1496,6 +1525,110 @@
             alert('Error loading data from server: ' + error);
         });
     }
+
+    function watchFriendSchedule(friendUid, friendName, isPopState) {
+        if (!friendUid) {
+            return;
+        }
+
+        if (stopScheduleWatching) {
+            stopScheduleWatching();
+            stopScheduleWatching = null;
+        }
+
+        viewingFriendUid = friendUid;
+        viewingFriendName = friendName || 'חבר';
+
+        // Set UI to readonly
+        courseButtonList.setReadonly(true);
+        courseCalendar.setReadonly(true);
+
+        // Hide edit-only controls
+        $('#course-select').closest('[data-intro]').hide();
+        $('#top-navbar-undo, #top-navbar-redo').addClass('d-none');
+        $('#top-navbar-home').removeClass('d-none');
+
+        // Show friend schedule banner
+        $('#friend-schedule-banner-name').text(viewingFriendName);
+        $('#friend-schedule-banner').css('display', 'flex');
+
+        document.title = viewingFriendName + ' - מערכת שעות - CheeseFork';
+
+        if (!isPopState) {
+            try {
+                history.pushState({ viewingFriend: friendUid, friendName: viewingFriendName }, '', window.location.pathname + window.location.search);
+            } catch (e) {
+                // Ignore history errors if any
+            }
+        }
+
+        $('#page-loader').show();
+
+        var firstDataLoaded = false;
+        var doc = firestoreUserDoc(friendUid);
+        stopScheduleWatching = doc.onSnapshot(function (result) {
+            var session = result.exists ? savedSessionFromFirestoreData(result.data()) : {};
+            setScheduleFromSavedSession(session, !firstDataLoaded);
+
+            if (!firstDataLoaded) {
+                $('#page-loader').hide();
+                firstDataLoaded = true;
+            }
+        }, function (error) {
+            $('#page-loader').hide();
+            BootstrapDialog.show({
+                title: 'שגיאה',
+                message: 'לא ניתן לטעון את המערכת של ' + viewingFriendName + '. ייתכן שהחבר טרם בנה מערכת לסמסטר זה.',
+                type: BootstrapDialog.TYPE_DANGER
+            });
+        });
+    }
+
+    function returnToOwnSchedule(isPopState) {
+        if (!viewingFriendUid) {
+            return;
+        }
+
+        if (stopScheduleWatching) {
+            stopScheduleWatching();
+            stopScheduleWatching = null;
+        }
+
+        viewingFriendUid = null;
+        viewingFriendName = null;
+
+        // Hide friend schedule banner
+        $('#friend-schedule-banner').hide();
+
+        if (!viewingSharedSchedule) {
+            $('#top-navbar-home').addClass('d-none');
+        }
+
+        // Show edit controls
+        $('#course-select').closest('[data-intro]').show();
+        courseButtonList.setReadonly(false);
+        courseCalendar.setReadonly(false);
+
+        document.title = 'CheeseFork - Your Cheesy Scheduler';
+
+        if (!isPopState) {
+            try {
+                history.pushState(null, '', window.location.pathname + window.location.search);
+            } catch (e) {
+                // Ignore history errors
+            }
+        }
+
+        $('#page-loader').show();
+        resetSchedule();
+        watchSavedSchedule(function () {
+            $('#page-loader').hide();
+        });
+    }
+
+    window.cheeseForkViewFriendSchedule = function (friendUid, friendName) {
+        watchFriendSchedule(friendUid, friendName);
+    };
 
     function watchSavedSchedule(onLoadedFunc) {
         var doc = firestoreAuthenticatedUserDoc();

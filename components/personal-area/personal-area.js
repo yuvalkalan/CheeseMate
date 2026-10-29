@@ -413,13 +413,27 @@ var PersonalArea = (function () {
         var list = $('<ul class="list-group"></ul>');
         friendProfiles.forEach(function (friend) {
             var item = $('<li class="list-group-item personal-area-list-item"></li>');
-            var details = $('<div class="personal-area-person-details"></div>');
+            var details = $('<div class="personal-area-person-details" style="cursor: pointer;" title="לחץ לצפייה במערכת של ' + friend.username + '"></div>');
             details.append($('<span class="personal-area-person-name"></span>').text(friend.username));
             if (friend.email) {
                 details.append($('<span class="personal-area-person-email text-muted"></span>').text(friend.email));
             }
 
+            var doView = function () {
+                if (that.dialog) {
+                    that.dialog.close();
+                }
+                if (window.cheeseForkViewFriendSchedule && friend.uid) {
+                    window.cheeseForkViewFriendSchedule(friend.uid, friend.username);
+                }
+            };
+            details.click(doView);
+
             var actions = $('<div class="personal-area-item-actions"></div>');
+            var viewBtn = $('<button type="button" class="btn btn-sm btn-outline-primary">' +
+                '<i class="fas fa-calendar-alt ml-1"></i> צפה במערכת' +
+                '</button>').click(doView);
+
             var removeBtn = $('<button type="button" class="btn btn-sm btn-outline-danger">' +
                 '<i class="fas fa-user-minus"></i> הסר חבר' +
                 '</button>').click(function () {
@@ -427,7 +441,7 @@ var PersonalArea = (function () {
                 that.removeFriend(friend.uid);
             });
 
-            actions.append(removeBtn);
+            actions.append(viewBtn, removeBtn);
             item.append(details, actions);
             list.append(item);
         });

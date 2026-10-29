@@ -850,15 +850,32 @@ var CourseButtonList = (function () {
         } else {
             var friendsList = $('<div class="list-group"></div>');
             friends.forEach(function (f) {
-                var item = $('<div class="list-group-item course-friends-item d-flex align-items-center py-2 px-3"></div>');
-                item.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
+                var item = $('<div class="list-group-item course-friends-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
+
+                var friendName = f.username || f.displayName || 'חבר';
+                var leftSide = $('<div class="d-flex align-items-center" style="cursor: pointer;" title="לחץ לצפייה במערכת של ' + friendName + '"></div>');
+                leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
 
                 var nameBox = $('<div></div>');
-                nameBox.append($('<div class="course-friends-name font-weight-bold"></div>').text(f.username || f.displayName || 'חבר'));
+                nameBox.append($('<div class="course-friends-name font-weight-bold"></div>').text(friendName));
                 if (f.email) {
                     nameBox.append($('<div class="course-friends-email small"></div>').text(f.email));
                 }
-                item.append(nameBox);
+                leftSide.append(nameBox);
+
+                var doView = function () {
+                    $('.modal').modal('hide');
+                    if (window.cheeseForkViewFriendSchedule && f.uid) {
+                        window.cheeseForkViewFriendSchedule(f.uid, friendName);
+                    }
+                };
+                leftSide.click(doView);
+
+                var viewBtn = $('<button type="button" class="btn btn-sm btn-outline-primary">' +
+                    '<i class="fas fa-calendar-alt ml-1"></i> צפה במערכת' +
+                    '</button>').click(doView);
+
+                item.append(leftSide, viewBtn);
                 friendsList.append(item);
             });
             modalContent.append(friendsList);
@@ -881,6 +898,18 @@ var CourseButtonList = (function () {
         this.badgeContainer.find('[data-toggle="tooltip"]').tooltip('hide');
         this.destroySortable();
         this.badgeContainer.empty();
+    };
+
+    CourseButtonList.prototype.setReadonly = function (readonly) {
+        var that = this;
+        that.readonly = !!readonly;
+        if (that.readonly) {
+            that.element.addClass('course-button-list-readonly');
+            that.destroySortable();
+        } else {
+            that.element.removeClass('course-button-list-readonly');
+            that.initializeSortableIfNeeded();
+        }
     };
 
     return CourseButtonList;

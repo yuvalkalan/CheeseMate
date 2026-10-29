@@ -272,5 +272,15 @@ img[src="assets/icon-students.png"] {
     color: rgb(222, 226, 230) !important;
 }
 
+#friend-schedule-banner {
+    background-color: #1e293b !important;
+    border-color: #3b82f6 !important;
+    color: #e2e8f0 !important;
+}
+
+#friend-schedule-banner .text-primary {
+    color: #60a5fa !important;
+}
+
 
 }
