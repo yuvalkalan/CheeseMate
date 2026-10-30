@@ -85,14 +85,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if the user is an Administrator (bootstrap email or assigned admin role in their user doc)
+    // Check if the user is an Administrator based on the role in their user document
     function isAdmin() {
-      return isAuthenticated() && (
-        (request.auth.token.email != null && request.auth.token.email == 'yuvalkalan@gmail.com') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'])
-      );
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'];
     }
 
     // Ensure role is not modified by non-admin users on update

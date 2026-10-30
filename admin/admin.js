@@ -70,10 +70,6 @@
 
     function isAdministrator(user, data) {
         if (!user) return false;
-        var emailLower = (user.email || '').toLowerCase();
-        if (emailLower === 'yuvalkalan@gmail.com') {
-            return true;
-        }
         if (data && (data.role === 'Administrator' || data.role === 'admin')) {
             return true;
         }
@@ -93,18 +89,8 @@
         db.collection('users').doc(user.uid).get()
             .then(function (doc) {
                 var data = doc.exists ? doc.data() : {};
-                var emailLower = (user.email || '').toLowerCase();
 
                 if (isAdministrator(user, data)) {
-                    // Bootstrap admin role in Firestore if missing
-                    if (data.role !== 'Administrator' && data.role !== 'admin') {
-                        db.collection('users').doc(user.uid).set({
-                            role: 'Administrator'
-                        }, { merge: true }).catch(function (e) {
-                            console.warn('Could not auto-set admin role:', e);
-                        });
-                    }
-
                     var displayName = data.username || data.displayName || user.displayName || user.email || 'מנהל';
                     userNameHeader.text(displayName);
                     switchView('dashboard');
@@ -116,15 +102,8 @@
             })
             .catch(function (err) {
                 console.error('Error fetching user document:', err);
-                // Fallback check for project owner email
-                if (user.email && user.email.toLowerCase() === 'yuvalkalan@gmail.com') {
-                    userNameHeader.text(user.email);
-                    switchView('dashboard');
-                    loadAllUsers();
-                } else {
-                    deniedUserEmail.text(user.email || user.uid);
-                    switchView('denied');
-                }
+                deniedUserEmail.text(user.email || user.uid);
+                switchView('denied');
             });
     });
 

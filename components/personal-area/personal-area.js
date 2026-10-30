@@ -49,9 +49,6 @@ var PersonalArea = (function () {
         if (this.userDocData && this.userDocData.role) {
             return this.userDocData.role;
         }
-        if (this.currentUser && (this.currentUser.email || '').toLowerCase() === 'yuvalkalan@gmail.com') {
-            return 'Administrator';
-        }
         return 'user';
     };
 
@@ -74,8 +71,7 @@ var PersonalArea = (function () {
             var data = snapshot.exists ? snapshot.data() : {};
             var defaultUsername = deriveDefaultUsername(user);
             var emailLower = (user.email || '').toLowerCase();
-            var defaultRole = (emailLower === 'yuvalkalan@gmail.com') ? 'Administrator' : 'user';
-            var roleToSave = data.role || defaultRole;
+            var roleToSave = data.role || 'user';
 
             var needsInit = !snapshot.exists ||
                 !data.username ||
@@ -110,7 +106,7 @@ var PersonalArea = (function () {
             that.userDocData = data;
             that.profilesCache[user.uid] = data;
 
-            var currentRole = data.role || defaultRole;
+            var currentRole = data.role || 'user';
             that.onRoleChanged(currentRole);
 
             var username = that.getCurrentUsername();
