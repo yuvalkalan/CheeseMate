@@ -56,9 +56,10 @@
     <link rel="stylesheet" href="components/course-feedback/course-feedback.css">
     <link rel="stylesheet" href="components/histogram-browser/histogram-browser.css">
     <link rel="stylesheet" href="components/personal-area/personal-area.css?v=8">
+    <link rel="stylesheet" href="components/notifications/notifications.css?v=13">
     <link rel="stylesheet" href="cheesefork.css?v=8">
     <noscript id="dark-mode-toggle-stylesheets">
-        <link rel="stylesheet" href="cheesefork-dark.css?v=8" media="(prefers-color-scheme: dark)">
+        <link rel="stylesheet" href="cheesefork-dark.css?v=13" media="(prefers-color-scheme: dark)">
     </noscript>
     <script src="dark-mode-toggle-stylesheets-loader.min.js"></script>
     <link rel="stylesheet" href="cheesefork-print.css" media="print">
@@ -101,6 +102,35 @@
                         </i>
                         אזור אישי
                     </a>
+                </li>
+                <li id="top-navbar-notifications" class="nav-item dropdown d-none">
+                    <a class="nav-link dropdown-toggle" href="#" id="top-navbar-dropdown-notifications" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="התראות">
+                        <i class="fas fa-bell unread-count-badge-container">
+                            <span class="unread-count-badge d-none" id="notifications-badge"></span>
+                        </i>
+                        התראות
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-left notifications-dropdown-menu shadow" aria-labelledby="top-navbar-dropdown-notifications">
+                        <div class="notifications-header d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-bell text-primary ml-2"></i>
+                                <span class="font-weight-bold">התראות</span>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted" id="notifications-mark-all-read" style="text-decoration: none;">
+                                סמן הכל כנקרא
+                            </button>
+                        </div>
+                        <div id="notifications-browser-prompt" class="px-3 py-2 bg-light border-bottom small d-none d-flex justify-content-between align-items-center">
+                            <span>קבל התראות גם כשהאתר ברקע</span>
+                            <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2" id="notifications-enable-browser-btn">הפעל</button>
+                        </div>
+                        <div class="notifications-list" id="notifications-list-container">
+                            <div class="notifications-empty text-center text-muted py-4">
+                                <i class="far fa-bell-slash fa-2x mb-2 d-block"></i>
+                                אין התראות חדשות
+                            </div>
+                        </div>
+                    </div>
                 </li>
                 <li id="top-navbar-logout" class="nav-item d-none">
                     <a class="nav-link" href="#" data-toggle="tooltip" data-placement="bottom" data-trigger="hover" title="">
@@ -466,8 +496,9 @@
 <script src="components/course-calendar/course-calendar.js?v=12"></script>
 <script src="components/course-feedback/course-feedback.js"></script>
 <script src="components/histogram-browser/histogram-browser.js"></script>
-<script src="components/personal-area/personal-area.js?v=9"></script>
+<script src="components/personal-area/personal-area.js?v=13"></script>
+<script src="components/notifications/notifications.js?v=13"></script>
 <script src="course-manager.js"></script>
-<script src="cheesefork.js?v=12"></script>
+<script src="cheesefork.js?v=13"></script>
 </body>
 </html>

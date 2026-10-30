@@ -1,7 +1,7 @@
 'use strict';
 
 /* global introJs, ColorHash, BootstrapDialog, ics, JsDiff, firebase, firebaseui, gtag */
-/* global CourseManager, CourseSelect, CourseButtonList, CourseExamInfo, CourseCalendar, CourseFeedback, PersonalArea */
+/* global CourseManager, CourseSelect, CourseButtonList, CourseExamInfo, CourseCalendar, CourseFeedback, PersonalArea, NotificationsManager */
 /* global courses_from_rishum, availableSemesters, currentSemester, scheduleSharingUserId */
 
 (function () {
@@ -26,6 +26,7 @@
     var courseExamInfo = null;
     var courseCalendar = null;
     var personalArea = null;
+    var notificationsManager = null;
 
     if (!crawlersInfo()) {
         cheeseforkInit();
@@ -979,6 +980,9 @@
                 if (stopCourseStudentCountsWatching) {
                     stopCourseStudentCountsWatching();
                 }
+                if (notificationsManager) {
+                    notificationsManager.stopWatching();
+                }
             },
             onUsernameChanged: function (username) {
                 var tooltipText = 'מחובר בתור: ' + firestoreDisplayNameDecode(username);
@@ -1000,6 +1004,16 @@
             onFriendsChanged: function () {
                 recomputeCourseStudentCounts();
             }
+        });
+
+        notificationsManager = new NotificationsManager({
+            firestoreDb: firestoreDb,
+            element: $('#top-navbar-notifications'),
+            badgeElement: $('#notifications-badge'),
+            listElement: $('#notifications-list-container'),
+            markAllBtn: $('#notifications-mark-all-read'),
+            browserPromptElement: $('#notifications-browser-prompt'),
+            enableBrowserBtn: $('#notifications-enable-browser-btn')
         });
 
         watchCourseStudentCounts();
@@ -1238,12 +1252,18 @@
             if (personalArea) {
                 personalArea.onUserSignedIn(user);
             }
+            if (notificationsManager) {
+                notificationsManager.onUserSignedIn(user);
+            }
             recomputeCourseStudentCounts();
         }
 
         function handleSignedOutUser() {
             if (personalArea) {
                 personalArea.stopWatching();
+            }
+            if (notificationsManager) {
+                notificationsManager.onUserSignedOut();
             }
             recomputeCourseStudentCounts();
             $('#top-navbar-personal-area').addClass('d-none');

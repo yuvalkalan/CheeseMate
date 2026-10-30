@@ -684,6 +684,7 @@ var PersonalArea = (function () {
         }
 
         var myUid = this.currentUser.uid;
+        var myUsername = this.getCurrentUsername() || 'חבר';
         var batch = this.firestoreDb.batch();
         var myRef = this.firestoreDb.collection('users').doc(myUid);
         var requesterRef = this.firestoreDb.collection('users').doc(requesterUid);
@@ -699,6 +700,17 @@ var PersonalArea = (function () {
             incomingRequests: firebase.firestore.FieldValue.arrayRemove(myUid),
             friends: firebase.firestore.FieldValue.arrayUnion(myUid)
         }, { merge: true });
+
+        // Add notification for the requester that their friend request was accepted
+        var notifRef = this.firestoreDb.collection('users').doc(requesterUid).collection('notifications').doc();
+        batch.set(notifRef, {
+            type: 'friend_request_accepted',
+            fromUid: myUid,
+            fromUsername: myUsername,
+            message: myUsername + ' אישר את בקשת החברות שלך!',
+            timestamp: Date.now(),
+            read: false
+        });
 
         batch.commit().catch(function (err) {
             alert('שגיאה באישור בקשת החברות: ' + err.message);

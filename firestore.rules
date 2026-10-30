@@ -31,6 +31,16 @@ rules_version = '2';
 //   - <semester>_custom_events: map (optional) - user-defined custom schedule events
 //   - <semester>_metadata_<courseId>: map (optional) - cached course metadata for diff detection
 //
+// Subcollection: users/{userId}/notifications
+// Document ID: {notificationId}
+// Fields:
+//   - type: string (required, 1..50 chars) - notification type (e.g., 'friend_request_accepted')
+//   - fromUid: string (required, 1..128 chars) - UID of user who triggered notification (must equal auth UID if sent to another user)
+//   - fromUsername: string (required, 1..200 chars) - sender username or display name
+//   - message: string (required, 1..500 chars) - notification text message
+//   - timestamp: number (required, positive) - client timestamp of the notification
+//   - read: bool (required, initially false on create) - whether notification was read
+//
 // Collection: courseFeedback
 // Document ID: {courseId} (course number, e.g. "02340118")
 // Fields:
@@ -143,6 +153,18 @@ service cloud.firestore {
          (data.outgoingRequests is list && data.outgoingRequests.size() <= 500));
     }
 
+    // Validate user notification document
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read']) &&
+        hasRequiredFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read']) &&
+        data.type is string && data.type.size() >= 1 && data.type.size() <= 50 &&
+        data.fromUid is string && data.fromUid.size() >= 1 && data.fromUid.size() <= 128 &&
+        data.fromUsername is string && data.fromUsername.size() >= 1 && data.fromUsername.size() <= 200 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
+        data.timestamp is number && data.timestamp > 0 &&
+        data.read is bool;
+    }
+
     // Validate a single course feedback post entry
     function isValidFeedbackPost(post) {
       return post is map &&
@@ -212,6 +234,26 @@ service cloud.firestore {
 
         allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
         allow update: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        // Notification documents are private to the recipient
+        allow get, list: if isOwner(userId);
+
+        // Created by the user themselves or by another authenticated user sending a notification
+        allow create: if isAuthenticated() &&
+          (isOwner(userId) || request.auth.uid == request.resource.data.fromUid) &&
+          isValidNotification(request.resource.data) &&
+          request.resource.data.read == false;
+
+        // Recipient can only update the read status
+        allow update: if isOwner(userId) &&
+          isValidNotification(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+          request.resource.data.read is bool;
+
+        // Recipient can delete notifications
         allow delete: if isOwner(userId);
       }
     }

@@ -282,5 +282,51 @@ img[src="assets/icon-students.png"] {
     color: #60a5fa !important;
 }
 
+/* Dark mode for Notifications */
+.notifications-dropdown-menu {
+    background-color: #2b3035 !important;
+    border-color: #495057 !important;
+    color: rgb(222, 226, 230) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+.notifications-header {
+    background-color: #212529 !important;
+    border-color: #495057 !important;
+    color: rgb(222, 226, 230) !important;
+}
+
+.notification-item {
+    border-color: #3e444a !important;
+    color: rgb(222, 226, 230) !important;
+}
+
+.notification-item:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+}
+
+.notification-item.unread {
+    background-color: rgba(13, 110, 253, 0.22) !important;
+}
+
+.notification-item.unread:hover {
+    background-color: rgba(13, 110, 253, 0.32) !important;
+}
+
+.notification-message {
+    color: rgb(222, 226, 230) !important;
+}
+
+.notification-time {
+    color: #adb5bd !important;
+}
+
+#notifications-browser-prompt {
+    background-color: #212529 !important;
+    border-color: #495057 !important;
+    color: rgb(222, 226, 230) !important;
+}
+
 
 }
