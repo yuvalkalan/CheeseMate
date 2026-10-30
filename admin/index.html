@@ -168,6 +168,9 @@
                         <i class="fas fa-users-cog ml-2"></i> ניהול משתמשים
                     </h5>
                     <div class="d-flex align-items-center flex-wrap gap-2">
+                        <a href="https://console.firebase.google.com/project/cheesemate-yk/authentication/users" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ml-2" title="פתיחת מסוף משתמשי Firebase Authentication">
+                            <i class="fas fa-external-link-alt ml-1"></i> מסוף Firebase Auth
+                        </a>
                         <button id="admin-refresh-users-btn" class="btn btn-outline-secondary btn-sm" title="רענן נתונים">
                             <i class="fas fa-sync-alt ml-1"></i> רענן
                         </button>
@@ -242,9 +245,12 @@
                         <div><strong>דוא״ל:</strong> <span id="delete-modal-email"></span></div>
                         <div class="text-truncate"><strong>UID:</strong> <span id="delete-modal-uid" class="font-monospace small"></span></div>
                     </div>
-                    <p class="text-danger small mb-0">
+                    <p class="text-danger small mb-2">
                         <i class="fas fa-info-circle ml-1"></i> פעולה זו תמחק לצמיתות את כל נתוני המשתמש: מערכות שעות בכל הסמסטרים, רשימת החברים וההתראות. לא ניתן לשחזר פעולה זו!
                     </p>
+                    <div class="alert alert-warning small mb-0 py-2">
+                        <i class="fas fa-shield-alt ml-1"></i> <strong>הערה:</strong> להסרת חשבון ההתחברות עצמו מ-Firebase Auth (ללא Cloud Functions), היכנס ל-<a href="https://console.firebase.google.com/project/cheesemate-yk/authentication/users" target="_blank" rel="noopener" class="font-weight-bold">מסוף המשתמשים ב-Firebase Console</a>.
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">ביטול</button>
