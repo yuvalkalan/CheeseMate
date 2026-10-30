@@ -185,6 +185,8 @@ var NotificationsManager = (function () {
             var iconHtml = '<i class="fas fa-check-circle text-success notification-icon"></i>';
             if (notif.type === 'friend_request_accepted') {
                 iconHtml = '<i class="fas fa-user-check text-success notification-icon"></i>';
+            } else if (notif.type === 'friend_request_received') {
+                iconHtml = '<i class="fas fa-user-plus text-primary notification-icon"></i>';
             }
 
             var icon = $(iconHtml);
@@ -203,13 +205,6 @@ var NotificationsManager = (function () {
                 e.preventDefault();
                 if (!notif.read) {
                     that.markAsRead(notif.id);
-                }
-
-                // If it's a friend acceptance or involves a friend, allow viewing their schedule
-                if (notif.fromUid && (window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule)) {
-                    var viewFn = window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule;
-                    viewFn(notif.fromUid, notif.fromUsername);
-                    that.element.find('.dropdown-menu').dropdown('toggle');
                 }
             });
 

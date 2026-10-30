@@ -661,6 +661,7 @@ var PersonalArea = (function () {
         }
 
         var myUid = this.currentUser.uid;
+        var myUsername = this.getCurrentUsername() || 'חבר';
         var batch = this.firestoreDb.batch();
         var myRef = this.firestoreDb.collection('users').doc(myUid);
         var targetRef = this.firestoreDb.collection('users').doc(targetUid);
@@ -672,6 +673,17 @@ var PersonalArea = (function () {
         batch.set(targetRef, {
             incomingRequests: firebase.firestore.FieldValue.arrayUnion(myUid)
         }, { merge: true });
+
+        // Add notification for the recipient that they received a friend request
+        var notifRef = this.firestoreDb.collection('users').doc(targetUid).collection('notifications').doc();
+        batch.set(notifRef, {
+            type: 'friend_request_received',
+            fromUid: myUid,
+            fromUsername: myUsername,
+            message: myUsername + ' שלח לך בקשת חברות!',
+            timestamp: Date.now(),
+            read: false
+        });
 
         batch.commit().catch(function (err) {
             alert('שגיאה בשליחת בקשת החברות: ' + err.message);
