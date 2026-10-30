@@ -14,6 +14,7 @@ rules_version = '2';
 //   - username: string or null (optional, max 200 chars) - user's chosen username in Personal Area
 //   - usernameLower: string or null (optional, max 200 chars) - lowercase username for case-insensitive lookup
 //   - email: string or null (optional, max 254 chars) - user's email address for friend lookup
+//   - role: string (optional, one of 'user', 'Administrator', 'admin') - authorization level / role
 //   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
 //   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
 //   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
@@ -84,21 +85,21 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if user is owner based on document's uid field
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    // Check if the user is an Administrator (bootstrap email or assigned admin role in their user doc)
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && request.auth.token.email == 'yuvalkalan@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'])
+      );
     }
 
-    // Verify UID hasn't been tampered with on create
-    function uidUnchanged() {
-      return !('uid' in request.resource.data) ||
-        request.resource.data.uid == request.auth.uid;
-    }
-
-    // Ensure uid field is not modified on update
-    function uidNotModified() {
-      return !('uid' in request.resource.data) ||
-        request.resource.data.uid == resource.data.uid;
+    // Ensure role is not modified by non-admin users on update
+    function isRoleUnchangedForNonAdmin() {
+      return isAdmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
+        (!('role' in resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user'));
     }
 
     // Validate required fields exist
@@ -145,6 +146,8 @@ service cloud.firestore {
         (!('email' in data) ||
          data.email == null ||
          (data.email is string && data.email.size() <= 254)) &&
+        (!('role' in data) ||
+         (data.role is string && (data.role in ['user', 'Administrator', 'admin']))) &&
         (!('friends' in data) ||
          (data.friends is list && data.friends.size() <= 500)) &&
         (!('incomingRequests' in data) ||
@@ -221,25 +224,30 @@ service cloud.firestore {
       // Reads and queries are public to support schedule sharing links (?uid=<userId>), friend search, and course student counts
       allow get, list: if true;
 
-      allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
+      allow create: if (isOwner(userId) || isAdmin()) &&
+        isValidScheduleDoc(request.resource.data) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
+
       allow update: if (
-        isOwner(userId) ||
+        isAdmin() ||
+        (isOwner(userId) && isRoleUnchangedForNonAdmin()) ||
         (isAuthenticated() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']))
       ) && isValidScheduleDoc(request.resource.data);
-      allow delete: if isOwner(userId);
+
+      allow delete: if isOwner(userId) || isAdmin();
 
       match /semesters/{semesterId} {
         allow get, list: if true;
 
         allow create: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
         allow update: if isOwner(userId) && isValidScheduleDoc(request.resource.data);
-        allow delete: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /notifications/{notificationId} {
-        // Notification documents are private to the recipient
-        allow get, list: if isOwner(userId);
+        // Notification documents are private to the recipient and readable by administrators
+        allow get, list: if isOwner(userId) || isAdmin();
 
         // Created by the user themselves or by another authenticated user sending a notification
         allow create: if isAuthenticated() &&
@@ -253,8 +261,8 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
           request.resource.data.read is bool;
 
-        // Recipient can delete notifications
-        allow delete: if isOwner(userId);
+        // Recipient or administrator can delete notifications
+        allow delete: if isOwner(userId) || isAdmin();
       }
     }
 

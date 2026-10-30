@@ -10,6 +10,7 @@ var PersonalArea = (function () {
         this.onUsernameChanged = options.onUsernameChanged || function () {};
         this.onIncomingRequestsCountChanged = options.onIncomingRequestsCountChanged || function () {};
         this.onFriendsChanged = options.onFriendsChanged || function () {};
+        this.onRoleChanged = options.onRoleChanged || function () {};
 
         this.currentUser = null;
         this.userDocData = null;
@@ -44,6 +45,21 @@ var PersonalArea = (function () {
         return deriveDefaultUsername(this.currentUser);
     };
 
+    PersonalArea.prototype.getRole = function () {
+        if (this.userDocData && this.userDocData.role) {
+            return this.userDocData.role;
+        }
+        if (this.currentUser && (this.currentUser.email || '').toLowerCase() === 'yuvalkalan@gmail.com') {
+            return 'Administrator';
+        }
+        return 'user';
+    };
+
+    PersonalArea.prototype.isAdmin = function () {
+        var r = this.getRole();
+        return r === 'Administrator' || r === 'admin';
+    };
+
     PersonalArea.prototype.onUserSignedIn = function (user) {
         var that = this;
         this.stopWatching();
@@ -58,9 +74,12 @@ var PersonalArea = (function () {
             var data = snapshot.exists ? snapshot.data() : {};
             var defaultUsername = deriveDefaultUsername(user);
             var emailLower = (user.email || '').toLowerCase();
+            var defaultRole = (emailLower === 'yuvalkalan@gmail.com') ? 'Administrator' : 'user';
+            var roleToSave = data.role || defaultRole;
 
             var needsInit = !snapshot.exists ||
                 !data.username ||
+                !data.role ||
                 data.usernameLower !== (data.username || defaultUsername).toLowerCase() ||
                 (emailLower && data.email !== emailLower) ||
                 data.uid !== user.uid;
@@ -72,7 +91,8 @@ var PersonalArea = (function () {
                     email: emailLower,
                     username: usernameToSave,
                     usernameLower: usernameToSave.toLowerCase(),
-                    displayName: usernameToSave
+                    displayName: usernameToSave,
+                    role: roleToSave
                 };
                 if (!Array.isArray(data.friends)) {
                     initUpdate.friends = [];
@@ -89,6 +109,9 @@ var PersonalArea = (function () {
 
             that.userDocData = data;
             that.profilesCache[user.uid] = data;
+
+            var currentRole = data.role || defaultRole;
+            that.onRoleChanged(currentRole);
 
             var username = that.getCurrentUsername();
             that.onUsernameChanged(username);

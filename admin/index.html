@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>CheeseMate - ניהול מערכת | Admin Dashboard</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32x32.png">
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../modules/bootstrap-rtl/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../modules/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="admin.css?v=1">
+</head>
+<body>
+
+    <!-- Admin Navigation Bar -->
+    <nav class="navbar navbar-expand-md admin-header py-2 mb-4">
+        <div class="container-fluid">
+            <a class="admin-brand" href="./">
+                <img src="../logo.png" alt="CheeseMate Logo" height="32" class="d-inline-block align-top">
+                <span>CheeseMate <span class="badge badge-primary font-weight-normal ml-1">ניהול</span></span>
+            </a>
+
+            <div class="d-flex align-items-center ml-auto">
+                <a href="../" class="btn btn-outline-secondary btn-sm mr-2" title="חזרה למערכת השעות">
+                    <i class="fas fa-arrow-right ml-1"></i> חזרה למערכת
+                </a>
+
+                <div id="admin-user-profile" class="d-none align-items-center">
+                    <span id="admin-user-name" class="font-weight-bold text-truncate mx-2" style="max-width: 180px;"></span>
+                    <span class="badge badge-danger mr-2">Administrator</span>
+                    <button id="admin-logout-btn" class="btn btn-outline-danger btn-sm" title="התנתקות">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-fluid px-md-4">
+
+        <!-- 1. State: Loading Spinner -->
+        <div id="admin-loading-state" class="text-center py-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="sr-only">טוען...</span>
+            </div>
+            <p class="mt-3 text-muted">בודק הרשאות גישה...</p>
+        </div>
+
+        <!-- 2. State: Sign In Required -->
+        <div id="admin-login-state" class="d-none">
+            <div class="card auth-card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-user-shield fa-4x text-primary"></i>
+                    </div>
+                    <h3 class="card-title font-weight-bold mb-2">כניסה לניהול מערכת</h3>
+                    <p class="text-muted mb-4">יש להתחבר עם חשבון מנהל (Administrator) על מנת לצפות בדף זה.</p>
+
+                    <button id="admin-google-login-btn" class="btn btn-outline-primary btn-block py-2 mb-3 font-weight-bold">
+                        <i class="fab fa-google ml-2"></i> התחבר באמצעות Google
+                    </button>
+
+                    <div class="text-center my-3 text-muted position-relative">
+                        <hr>
+                        <span class="bg-white px-3 position-relative" style="top: -26px;">או דוא״ל וסיסמה</span>
+                    </div>
+
+                    <form id="admin-email-login-form">
+                        <div class="form-group text-right">
+                            <label for="admin-login-email" class="small font-weight-bold">דוא״ל</label>
+                            <input type="email" class="form-control" id="admin-login-email" required placeholder="name@example.com">
+                        </div>
+                        <div class="form-group text-right">
+                            <label for="admin-login-password" class="small font-weight-bold">סיסמה</label>
+                            <input type="password" class="form-control" id="admin-login-password" required placeholder="סיסמה">
+                        </div>
+                        <div id="admin-login-error" class="alert alert-danger py-2 small d-none" role="alert"></div>
+                        <button type="submit" class="btn btn-primary btn-block py-2 font-weight-bold">
+                            התחברות
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. State: Access Denied (Logged in but not Administrator) -->
+        <div id="admin-denied-state" class="d-none">
+            <div class="card auth-card text-center border-danger">
+                <div class="card-body">
+                    <div class="mb-3 text-danger">
+                        <i class="fas fa-ban fa-4x"></i>
+                    </div>
+                    <h3 class="card-title font-weight-bold text-danger mb-2">אין הרשאת גישה</h3>
+                    <p class="text-muted mb-4">
+                        החשבון המחובר (<span id="denied-user-email" class="font-weight-bold"></span>) מוגדר כ-<strong>משתמש רגיל (user)</strong> ואין לו הרשאות מנהל מערכת (Administrator).
+                    </p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="../" class="btn btn-primary ml-2">
+                            <i class="fas fa-home ml-1"></i> חזרה לאתר
+                        </a>
+                        <button id="denied-switch-account-btn" class="btn btn-outline-secondary">
+                            <i class="fas fa-exchange-alt ml-1"></i> החלף חשבון
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. State: Authorized Administrator Dashboard -->
+        <div id="admin-dashboard-state" class="d-none">
+
+            <!-- Stats Overview Cards -->
+            <div class="row mb-4">
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="card stat-card stat-card-total h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="stat-label text-primary">סה״כ משתמשים רשומים</div>
+                                    <div class="stat-value" id="stat-total-users">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-users stat-icon text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="card stat-card stat-card-admins h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="stat-label text-danger">מנהלי מערכת (Administrators)</div>
+                                    <div class="stat-value" id="stat-admin-users">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-user-shield stat-icon text-danger"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-4 col-md-6 mb-4">
+                    <div class="card stat-card stat-card-users h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="stat-label text-success">משתמשים רגילים (Users)</div>
+                                    <div class="stat-value" id="stat-regular-users">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-user-check stat-icon text-success"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Management Table Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 card-header-actions">
+                    <h5 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-users-cog ml-2"></i> ניהול משתמשים
+                    </h5>
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                        <button id="admin-refresh-users-btn" class="btn btn-outline-secondary btn-sm" title="רענן נתונים">
+                            <i class="fas fa-sync-alt ml-1"></i> רענן
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Filters & Search Toolbar -->
+                    <div class="row mb-3">
+                        <div class="col-md-7 col-lg-8 mb-2">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                </div>
+                                <input type="text" id="admin-search-input" class="form-control" placeholder="חיפוש לפי שם משתמש, דוא״ל או מזהה UID...">
+                            </div>
+                        </div>
+                        <div class="col-md-5 col-lg-4 mb-2">
+                            <select id="admin-role-filter" class="custom-select">
+                                <option value="all">כל דרגות ההרשאה</option>
+                                <option value="Administrator">מנהלי מערכת (Administrator) בלבד</option>
+                                <option value="user">משתמשים רגילים (user) בלבד</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Users Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="admin-users-table">
+                            <thead>
+                                <tr>
+                                    <th>משתמש</th>
+                                    <th>דוא״ל</th>
+                                    <th>מזהה משתמש (UID)</th>
+                                    <th>דרגת הרשאה</th>
+                                    <th>חברים</th>
+                                    <th class="text-center">פעולות</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-tbody">
+                                <!-- Populated dynamically by admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="admin-no-users" class="text-center py-5 text-muted d-none">
+                        <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                        לא נמצאו משתמשים התואמים את החיפוש
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteUserModal" tabindex="-1" role="dialog" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title font-weight-bold" id="deleteUserModalLabel">
+                        <i class="fas fa-exclamation-triangle ml-2"></i> מחיקת משתמש לצמיתות
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="font-weight-bold">האם אתה בטוח שברצונך למחוק את המשתמש הבא?</p>
+                    <div class="alert alert-light border">
+                        <div><strong>שם משתמש:</strong> <span id="delete-modal-username"></span></div>
+                        <div><strong>דוא״ל:</strong> <span id="delete-modal-email"></span></div>
+                        <div class="text-truncate"><strong>UID:</strong> <span id="delete-modal-uid" class="font-monospace small"></span></div>
+                    </div>
+                    <p class="text-danger small mb-0">
+                        <i class="fas fa-info-circle ml-1"></i> פעולה זו תמחק לצמיתות את כל נתוני המשתמש: מערכות שעות בכל הסמסטרים, רשימת החברים וההתראות. לא ניתן לשחזר פעולה זו!
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">ביטול</button>
+                    <button type="button" class="btn btn-danger font-weight-bold" id="confirm-delete-user-btn">
+                        <i class="fas fa-trash-alt ml-1"></i> מחק משתמש
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../modules/fullcalendar/lib/jquery.min.js"></script>
+    <script src="../modules/popper/popper.js"></script>
+    <script src="../modules/bootstrap-rtl/js/bootstrap.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore-compat.js"></script>
+    <script src="admin.js?v=1"></script>
+</body>
+</html>

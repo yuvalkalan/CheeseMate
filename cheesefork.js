@@ -1003,6 +1003,14 @@
             },
             onFriendsChanged: function () {
                 recomputeCourseStudentCounts();
+            },
+            onRoleChanged: function (role) {
+                var isAdmin = (role === 'Administrator' || role === 'admin');
+                if (isAdmin) {
+                    $('#top-navbar-admin').removeClass('d-none');
+                } else {
+                    $('#top-navbar-admin').addClass('d-none');
+                }
             }
         });
 
@@ -1267,6 +1275,7 @@
             }
             recomputeCourseStudentCounts();
             $('#top-navbar-personal-area').addClass('d-none');
+            $('#top-navbar-admin').addClass('d-none');
             $('#top-navbar-logout').addClass('d-none');
             $('#top-navbar-login').removeClass('d-none');
             $('#top-navbar-share').find('a').addClass('disabled').tooltip('enable');
