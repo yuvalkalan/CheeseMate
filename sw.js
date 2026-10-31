@@ -1,42 +1,43 @@
+/* eslint-env serviceworker */
 'use strict';
 
-/**
- * CheeseMate Service Worker for Web Push Notifications and Offline Capabilities
- */
+// CheeseMate Service Worker for Web Push notifications (site closed or phone locked)
+const SW_VERSION = 'cheesemate-sw-v1';
 
-// Install event - activate immediately
-self.addEventListener('install', function (event) {
+self.addEventListener('install', (event) => {
+    // Activate immediately without waiting for existing clients to close
     self.skipWaiting();
 });
 
-// Activate event - claim clients immediately
-self.addEventListener('activate', function (event) {
+self.addEventListener('activate', (event) => {
+    // Take control of uncontrolled clients immediately
     event.waitUntil(self.clients.claim());
 });
 
-// Push event - triggered when a Web Push message arrives (site closed or phone locked)
-self.addEventListener('push', function (event) {
-    var data = {};
+self.addEventListener('push', (event) => {
+    let payload = {};
     if (event.data) {
         try {
-            data = event.data.json();
+            payload = event.data.json();
         } catch (e) {
-            data = {
+            payload = {
                 title: 'CheeseMate',
                 body: event.data.text()
             };
         }
     }
 
-    var title = data.title || 'CheeseMate';
-    var options = {
-        body: data.body || 'התראה חדשה מ-CheeseMate',
-        icon: data.icon || '/icons/favicon-32x32.png',
-        badge: data.badge || '/icons/favicon-32x32.png',
-        data: data.data || { url: '/' },
-        tag: data.tag || 'cheesemate-notification',
+    const title = payload.title || 'CheeseMate';
+    const options = {
+        body: payload.body || 'התקבלה הודעה חדשה ב-CheeseMate',
+        icon: payload.icon || '/icons/favicon-32x32.png',
+        badge: payload.badge || '/icons/favicon-32x32.png',
+        tag: payload.tag || ('cheesemate-' + Date.now()),
         renotify: true,
-        vibrate: [100, 50, 100]
+        vibrate: [200, 100, 200],
+        data: {
+            url: (payload.data && payload.data.url) || payload.url || '/'
+        }
     };
 
     event.waitUntil(
@@ -44,30 +45,26 @@ self.addEventListener('push', function (event) {
     );
 });
 
-// Notification click event - open or focus the app
-self.addEventListener('notificationclick', function (event) {
+self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
-    var targetUrl = '/';
-    if (event.notification.data && event.notification.data.url) {
-        targetUrl = event.notification.data.url;
-    }
+    const targetUrl = (event.notification.data && event.notification.data.url) || '/';
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-            // If a window is already open, focus it
-            for (var i = 0; i < clientList.length; i++) {
-                var client = clientList[i];
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+            // If any window is already open under this origin, focus it and navigate
+            for (let i = 0; i < clientList.length; i++) {
+                const client = clientList[i];
                 if ('focus' in client) {
-                    if (targetUrl && targetUrl !== '/' && 'navigate' in client) {
+                    if (targetUrl && client.url !== targetUrl && 'navigate' in client) {
                         client.navigate(targetUrl);
                     }
                     return client.focus();
                 }
             }
-            // If no window is open, open a new one
-            if (clients.openWindow) {
-                return clients.openWindow(targetUrl);
+            // If no window is open (e.g. browser was closed or phone locked), open a new window
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(targetUrl);
             }
         })
     );

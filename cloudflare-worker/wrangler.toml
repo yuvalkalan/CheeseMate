@@ -1,0 +1,13 @@
+name = "cheesemate-push"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = [ "nodejs_compat" ]
+
+kv_namespaces = [
+  { binding = "SUBSCRIPTIONS", id = "4b0c98a463bd4b90ac435d4b7b59f18d" }
+]
+
+[vars]
+VAPID_PUBLIC_KEY = "BF758LqnJZ0G2xGLLZMsJVkY77-kfftlG5BnStq52FkfeDb64K0eywSvAjyaZlY-8zbMzjM9_AfWQW7hr4rVvCo"
+VAPID_PRIVATE_KEY = "sGazapVG1lM-r4AhUKYJHop1MYbGqSufb2MmZv6DuqI"
+VAPID_SUBJECT = "mailto:yuvalkalan@gmail.com"

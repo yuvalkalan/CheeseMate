@@ -1,0 +1,13 @@
+{
+  "name": "cheesemate-push",
+  "version": "1.0.0",
+  "description": "CheeseMate Web Push Notification Cloudflare Worker",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0"
+  }
+}

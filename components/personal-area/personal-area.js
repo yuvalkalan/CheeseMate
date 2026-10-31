@@ -697,25 +697,22 @@ var PersonalArea = (function () {
 
         // Add notification for the recipient that they received a friend request
         var notifRef = this.firestoreDb.collection('users').doc(targetUid).collection('notifications').doc();
-        var messageText = myUsername + ' שלח לך בקשת חברות!';
+        var requestMsg = myUsername + ' שלח לך בקשת חברות!';
         batch.set(notifRef, {
             type: 'friend_request_received',
             fromUid: myUid,
             fromUsername: myUsername,
-            message: messageText,
+            message: requestMsg,
             timestamp: Date.now(),
             read: false
         });
 
-        var db = this.firestoreDb;
         batch.commit().then(function () {
-            if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPushToUser) {
-                NotificationsManager.sendPushToUser(db, targetUid, {
+            if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
+                NotificationsManager.sendPush(targetUid, {
                     title: 'CheeseMate',
-                    body: messageText,
-                    icon: '/icons/favicon-32x32.png',
-                    badge: '/icons/favicon-32x32.png',
-                    data: { url: '/?tab=friends' }
+                    body: requestMsg,
+                    url: '/?tab=friends'
                 });
             }
         }).catch(function (err) {
@@ -748,25 +745,22 @@ var PersonalArea = (function () {
 
         // Add notification for the requester that their friend request was accepted
         var notifRef = this.firestoreDb.collection('users').doc(requesterUid).collection('notifications').doc();
-        var acceptMessageText = myUsername + ' אישר את בקשת החברות שלך!';
+        var acceptMsg = myUsername + ' אישר את בקשת החברות שלך!';
         batch.set(notifRef, {
             type: 'friend_request_accepted',
             fromUid: myUid,
             fromUsername: myUsername,
-            message: acceptMessageText,
+            message: acceptMsg,
             timestamp: Date.now(),
             read: false
         });
 
-        var db = this.firestoreDb;
         batch.commit().then(function () {
-            if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPushToUser) {
-                NotificationsManager.sendPushToUser(db, requesterUid, {
+            if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
+                NotificationsManager.sendPush(requesterUid, {
                     title: 'CheeseMate',
-                    body: acceptMessageText,
-                    icon: '/icons/favicon-32x32.png',
-                    badge: '/icons/favicon-32x32.png',
-                    data: { url: '/?tab=friends' }
+                    body: acceptMsg,
+                    url: '/?tab=friends'
                 });
             }
         }).catch(function (err) {

@@ -1,15 +1,17 @@
 'use strict';
 
-/* global firebase */
+/* global firebase, $ */
 
 // eslint-disable-next-line no-unused-vars
 var NotificationsManager = (function () {
-    var VAPID_PUBLIC_KEY = 'BKg-LrqshpQPZ-hamsMkdCoo7ABvSFbBZpHcnlkYqpqRJ4M8UdI9WBqd79fL7YnIr0PbyKdaHhI-uSAhY4mL7hs';
-    var WORKER_SEND_URL = 'https://cheesemate-push.yuvalkalan.workers.dev/send';
+    var VAPID_PUBLIC_KEY = 'BF758LqnJZ0G2xGLLZMsJVkY77-kfftlG5BnStq52FkfeDb64K0eywSvAjyaZlY-8zbMzjM9_AfWQW7hr4rVvCo';
+    var WORKER_URL = 'https://cheesemate-push.yuvalkalan.workers.dev';
 
     function urlBase64ToUint8Array(base64String) {
         var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-        var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        var base64 = (base64String + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
         var rawData = window.atob(base64);
         var outputArray = new Uint8Array(rawData.length);
         for (var i = 0; i < rawData.length; ++i) {
@@ -57,7 +59,7 @@ var NotificationsManager = (function () {
     }
 
     NotificationsManager.VAPID_PUBLIC_KEY = VAPID_PUBLIC_KEY;
-    NotificationsManager.WORKER_SEND_URL = WORKER_SEND_URL;
+    NotificationsManager.WORKER_URL = WORKER_URL;
 
     NotificationsManager.prototype.initServiceWorker = function () {
         var that = this;
@@ -69,7 +71,7 @@ var NotificationsManager = (function () {
             .then(function (reg) {
                 that.swRegistration = reg;
                 if (window.Notification && Notification.permission === 'granted' && that.currentUser) {
-                    that.ensurePushSubscription();
+                    that.syncPushSubscription();
                 }
             })
             .catch(function (err) {
@@ -77,9 +79,9 @@ var NotificationsManager = (function () {
             });
     };
 
-    NotificationsManager.prototype.ensurePushSubscription = function () {
+    NotificationsManager.prototype.syncPushSubscription = function () {
         var that = this;
-        if (!that.currentUser || !that.firestoreDb || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (!that.currentUser || !('serviceWorker' in navigator) || !('PushManager' in window)) {
             return Promise.resolve(null);
         }
 
@@ -90,51 +92,34 @@ var NotificationsManager = (function () {
             if (existingSub) {
                 return existingSub;
             }
-            var convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+            var appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
             return that.swRegistration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: convertedVapidKey
+                applicationServerKey: appServerKey
             });
         }).then(function (subscription) {
-            if (!subscription) return null;
-            return that.syncSubscriptionToFirestore(subscription);
-        }).catch(function (err) {
-            console.warn('Failed to ensure push subscription:', err);
-            return null;
-        });
-    };
-
-    NotificationsManager.prototype.syncSubscriptionToFirestore = function (subscription) {
-        var that = this;
-        if (!that.currentUser || !that.firestoreDb || !subscription) {
-            return Promise.resolve();
-        }
-
-        var subJson = subscription.toJSON ? subscription.toJSON() : null;
-        if (!subJson || !subJson.endpoint) {
-            subJson = {
-                endpoint: subscription.endpoint,
-                keys: {}
-            };
-        }
-        subJson.updatedAt = Date.now();
-        subJson.userAgent = navigator.userAgent || '';
-
-        var userRef = that.firestoreDb.collection('users').doc(that.currentUser.uid);
-        return userRef.get().then(function (doc) {
-            if (!doc.exists) return;
-            var currentSubs = (doc.data() && doc.data().pushSubscriptions) || [];
-            // Remove previous entry with same endpoint
-            var updatedSubs = currentSubs.filter(function (s) {
-                return s && s.endpoint !== subJson.endpoint;
-            });
-            updatedSubs.push(subJson);
-            if (updatedSubs.length > 20) {
-                updatedSubs = updatedSubs.slice(updatedSubs.length - 20);
+            if (!subscription || !that.currentUser) {
+                return null;
             }
-            return userRef.update({ pushSubscriptions: updatedSubs });
+
+            return fetch(WORKER_URL + '/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    uid: that.currentUser.uid,
+                    subscription: subscription.toJSON()
+                })
+            }).then(function (res) {
+                return res.json();
+            }).catch(function (err) {
+                console.warn('Failed to register subscription with push worker:', err);
+                return null;
+            });
         }).catch(function (err) {
-            console.warn('Error saving push subscription to Firestore:', err);
+            console.warn('Error during push subscription sync:', err);
+            return null;
         });
     };
 
@@ -161,7 +146,7 @@ var NotificationsManager = (function () {
                             }
                         }
                         if (permission === 'granted') {
-                            that.ensurePushSubscription();
+                            that.syncPushSubscription();
                         }
                     });
                 }
@@ -172,50 +157,64 @@ var NotificationsManager = (function () {
             that.testPushBtn.click(function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                that.sendTestPush(5);
-            });
-        }
-    };
 
-    NotificationsManager.prototype.sendTestPush = function (delaySeconds) {
-        var that = this;
-        if (!that.currentUser) {
-            alert('עליך להתחבר כדי לשלוח התראת בדיקה');
-            return;
-        }
-
-        if (window.Notification && Notification.permission !== 'granted') {
-            Notification.requestPermission().then(function (permission) {
-                if (permission === 'granted') {
-                    that.ensurePushSubscription().then(function () {
-                        that.triggerTestPush(delaySeconds);
-                    });
-                } else {
-                    alert('יש לאשר הרשאת התראות כדי לקבל התראות בדחיפה');
+                if (!that.currentUser) {
+                    alert('נא להתחבר למערכת תחילה');
+                    return;
                 }
-            });
-            return;
-        }
 
-        that.ensurePushSubscription().then(function () {
-            that.triggerTestPush(delaySeconds);
-        });
+                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                    alert('הדפדפן שלך אינו תומך בהתראות Push');
+                    return;
+                }
+
+                if (Notification.permission !== 'granted') {
+                    Notification.requestPermission().then(function (permission) {
+                        if (permission === 'granted') {
+                            that.syncPushSubscription().then(function () {
+                                that.triggerTestPush();
+                            });
+                        } else {
+                            alert('יש לאשר קבלת התראות בדפדפן כדי לקבל הודעות Push');
+                        }
+                    });
+                    return;
+                }
+
+                that.triggerTestPush();
+            });
+        }
     };
 
-    NotificationsManager.prototype.triggerTestPush = function (delaySeconds) {
+    NotificationsManager.prototype.triggerTestPush = function () {
         var that = this;
-        var delay = (typeof delaySeconds === 'number' && delaySeconds > 0) ? delaySeconds : 5;
-        alert('התראת בדיקה תישלח בעוד ' + delay + ' שניות!\nסגור את הלשונית או נעל את הטלפון עכשיו כדי לראות את ההתראה מופיעה במסך הנעול.');
+        if (!that.currentUser) return;
 
-        var payload = {
-            title: 'CheeseMate בדיקה',
-            body: 'בדיקת התראה מוצלחת! ההתראה עובדת גם כשהאתר סגור או כשהמסך נעול.',
-            icon: '/icons/favicon-32x32.png',
-            badge: '/icons/favicon-32x32.png',
-            data: { url: '/' }
-        };
+        var originalHtml = that.testPushBtn.html();
+        that.testPushBtn.prop('disabled', true).html(
+            '<i class="fas fa-spinner fa-spin ml-1"></i> שולח בעוד 5 שנ\'... נעל את המסך!'
+        );
 
-        NotificationsManager.sendPushToUser(that.firestoreDb, that.currentUser.uid, payload, delay);
+        // Ensure subscription is synced first, then schedule push with 5s delay
+        that.syncPushSubscription().then(function () {
+            return NotificationsManager.sendPush(that.currentUser.uid, {
+                title: 'CheeseMate',
+                body: 'בדיקת התראה מוצלחת! האתר פועל גם בנעילת מסך.',
+                url: '/',
+                tag: 'cheesemate-test-' + Date.now(),
+                delaySeconds: 5
+            });
+        }).then(function (result) {
+            if (result && result.sent === 0 && result.reason === 'no_active_subscriptions') {
+                alert('לא נמצא מכשיר רשום להתראות. נסה להפעיל מחדש את הרשאות ההתראות.');
+            }
+        }).catch(function (err) {
+            console.warn('Error during test push:', err);
+        }).finally(function () {
+            setTimeout(function () {
+                that.testPushBtn.prop('disabled', false).html(originalHtml);
+            }, 6000);
+        });
     };
 
     NotificationsManager.prototype.checkBrowserPrompt = function () {
@@ -237,7 +236,7 @@ var NotificationsManager = (function () {
         that.checkBrowserPrompt();
 
         if (window.Notification && Notification.permission === 'granted') {
-            that.ensurePushSubscription();
+            that.syncPushSubscription();
         }
 
         var query = that.firestoreDb.collection('users').doc(user.uid)
@@ -301,14 +300,12 @@ var NotificationsManager = (function () {
     NotificationsManager.prototype.render = function (notifs, unreadCount) {
         var that = this;
 
-        // Update badge
         if (unreadCount > 0) {
             that.badgeElement.text(unreadCount > 99 ? '99+' : unreadCount).removeClass('d-none');
         } else {
             that.badgeElement.addClass('d-none');
         }
 
-        // Update mark all as read button visibility/style
         if (that.markAllBtn) {
             if (unreadCount > 0) {
                 that.markAllBtn.removeClass('text-muted').addClass('text-primary');
@@ -397,25 +394,12 @@ var NotificationsManager = (function () {
     };
 
     NotificationsManager.prototype.showDesktopNotification = function (notifData) {
-        var title = 'CheeseMate';
-        var options = {
-            body: notifData.message,
-            icon: '/icons/favicon-32x32.png',
-            badge: '/icons/favicon-32x32.png',
-            data: { url: '/' }
-        };
-
-        if (this.swRegistration && this.swRegistration.showNotification) {
-            this.swRegistration.showNotification(title, options).catch(function () {
-                try {
-                    new Notification(title, options);
-                } catch (e) {
-                    // Ignore if restricted
-                }
-            });
-        } else if (window.Notification && Notification.permission === 'granted') {
+        if (window.Notification && Notification.permission === 'granted') {
             try {
-                new Notification(title, options);
+                new Notification('CheeseMate', {
+                    body: notifData.message,
+                    icon: '/icons/favicon-32x32.png'
+                });
             } catch (e) {
                 // Ignore if browser restricts notifications
             }
@@ -423,40 +407,35 @@ var NotificationsManager = (function () {
     };
 
     /**
-     * Send Web Push notification to a target user via the Cloudflare Worker
-     * Works when target user's browser is closed or phone is locked!
+     * Send Web Push notification to target user via Cloudflare Worker
+     * Delivers push notification even when site is closed or phone is locked!
      */
-    NotificationsManager.sendPushToUser = function (firestoreDb, targetUid, payload, delaySeconds) {
-        if (!firestoreDb || !targetUid || !payload) {
+    NotificationsManager.sendPush = function (targetUid, options) {
+        if (!targetUid) {
             return Promise.resolve(null);
         }
 
-        return firestoreDb.collection('users').doc(targetUid).get().then(function (doc) {
-            if (!doc.exists) return null;
-            var data = doc.data() || {};
-            var subscriptions = data.pushSubscriptions || [];
-            if (!subscriptions || subscriptions.length === 0) {
-                return null;
-            }
+        options = options || {};
 
-            return fetch(WORKER_SEND_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    subscriptions: subscriptions,
-                    payload: payload,
-                    delaySeconds: delaySeconds || 0
-                })
-            }).then(function (resp) {
-                return resp.json();
-            }).catch(function (err) {
-                console.warn('Failed to dispatch push notification via Cloudflare Worker:', err);
-                return null;
-            });
+        return fetch(WORKER_URL + '/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                targetUid: targetUid,
+                title: options.title || 'CheeseMate',
+                body: options.body || '',
+                icon: options.icon || '/icons/favicon-32x32.png',
+                badge: options.badge || '/icons/favicon-32x32.png',
+                url: options.url || '/',
+                tag: options.tag || ('cheesemate-' + Date.now()),
+                delaySeconds: options.delaySeconds || 0
+            })
+        }).then(function (res) {
+            return res.json();
         }).catch(function (err) {
-            console.warn('Error fetching recipient subscriptions for push:', err);
+            console.warn('Error sending push notification via Cloudflare Worker:', err);
             return null;
         });
     };
