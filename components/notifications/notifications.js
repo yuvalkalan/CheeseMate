@@ -47,6 +47,7 @@ var NotificationsManager = (function () {
         this.browserPromptElement = options.browserPromptElement;
         this.enableBrowserBtn = options.enableBrowserBtn;
         this.testPushBtn = options.testPushBtn;
+        this.testFriendRequestBtn = options.testFriendRequestBtn;
 
         this.currentUser = null;
         this.unsubscribe = null;
@@ -197,6 +198,38 @@ var NotificationsManager = (function () {
                 that.triggerTestPush();
             });
         }
+
+        if (that.testFriendRequestBtn) {
+            that.testFriendRequestBtn.click(function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!that.currentUser) {
+                    alert('נא להתחבר למערכת תחילה');
+                    return;
+                }
+
+                if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                    alert('הדפדפן שלך אינו תומך בהתראות Push');
+                    return;
+                }
+
+                if (Notification.permission !== 'granted') {
+                    Notification.requestPermission().then(function (permission) {
+                        if (permission === 'granted') {
+                            that.syncPushSubscription().then(function () {
+                                that.triggerTestFriendRequestPush();
+                            });
+                        } else {
+                            alert('יש לאשר קבלת התראות בדפדפן כדי לקבל הודעות Push');
+                        }
+                    });
+                    return;
+                }
+
+                that.triggerTestFriendRequestPush();
+            });
+        }
     };
 
     NotificationsManager.prototype.triggerTestPush = function () {
@@ -226,6 +259,60 @@ var NotificationsManager = (function () {
         }).finally(function () {
             setTimeout(function () {
                 that.testPushBtn.prop('disabled', false).html(originalHtml);
+            }, 6000);
+        });
+    };
+
+    NotificationsManager.prototype.triggerTestFriendRequestPush = function () {
+        var that = this;
+        if (!that.currentUser) return;
+
+        var btn = that.testFriendRequestBtn;
+        var originalHtml = btn ? btn.html() : '';
+        if (btn) {
+            btn.prop('disabled', true).html(
+                '<i class="fas fa-spinner fa-spin ml-1"></i> שולח בעוד 5 שנ\'... נעל את המסך!'
+            );
+        }
+
+        var sampleUsername = 'חבר לדוגמה';
+        var sampleMsg = sampleUsername + ' שלח/ה לך בקשת חברות!';
+        var notifRef = that.firestoreDb.collection('users').doc(that.currentUser.uid).collection('notifications').doc();
+
+        // Write to Firestore so notification list and unread count badge update
+        notifRef.set({
+            type: 'friend_request_received',
+            fromUid: 'test_friend_simulation',
+            fromUsername: sampleUsername,
+            message: sampleMsg,
+            timestamp: Date.now(),
+            read: false
+        }).catch(function (e) {
+            console.warn('Failed to store test friend request in Firestore:', e);
+        });
+
+        // Ensure subscription is synced first, then schedule push with 5s delay
+        that.syncPushSubscription().then(function () {
+            return NotificationsManager.sendPush(that.currentUser.uid, {
+                title: 'CheeseMate',
+                body: sampleMsg,
+                icon: '/icons/android-chrome-192x192.png',
+                badge: '/icons/favicon-32x32.png',
+                url: '/?tab=friends',
+                tag: notifRef.id,
+                delaySeconds: 5
+            });
+        }).then(function (result) {
+            if (result && result.sent === 0 && result.reason === 'no_active_subscriptions') {
+                alert('לא נמצא מכשיר רשום להתראות. נסה להפעיל מחדש את הרשאות ההתראות.');
+            }
+        }).catch(function (err) {
+            console.warn('Error during test friend request push:', err);
+        }).finally(function () {
+            setTimeout(function () {
+                if (btn) {
+                    btn.prop('disabled', false).html(originalHtml);
+                }
             }, 6000);
         });
     };
@@ -295,12 +382,27 @@ var NotificationsManager = (function () {
     };
 
     NotificationsManager.prototype.onUserSignedOut = function () {
+        var oldUser = this.currentUser;
         this.stopWatching();
         this.currentUser = null;
         this.notifications = [];
         this.element.addClass('d-none');
         this.badgeElement.addClass('d-none').text('0');
         this.render([], 0);
+
+        if (oldUser && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(function (reg) {
+                return reg.pushManager.getSubscription();
+            }).then(function (sub) {
+                if (sub) {
+                    fetch(WORKER_URL + '/unsubscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: oldUser.uid, endpoint: sub.endpoint })
+                    }).catch(function () {});
+                }
+            }).catch(function () {});
+        }
     };
 
     NotificationsManager.prototype.stopWatching = function () {

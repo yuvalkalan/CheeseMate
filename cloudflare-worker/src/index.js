@@ -148,6 +148,7 @@ export default {
                 data: pushPayload,
                 options: {
                   ttl: body.ttl || 86400, // 24 hours
+                  urgency: body.urgency || 'high',
                 },
               };
 

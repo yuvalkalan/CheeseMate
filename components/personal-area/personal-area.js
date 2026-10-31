@@ -196,6 +196,11 @@ var PersonalArea = (function () {
 
         this.isChangeNameOpen = false;
 
+        var urlSearch = window.location.search || '';
+        if (urlSearch.indexOf('tab=friends') !== -1 || urlSearch.indexOf('tab=requests') !== -1) {
+            this.activeTab = 'requests';
+        }
+
         if (this.dialog) {
             this.refreshDialogContent();
             this.dialog.open();
@@ -286,6 +291,33 @@ var PersonalArea = (function () {
             that.confirmAccountDeletion();
         });
 
+        var hasPushSupport = ('Notification' in window) && ('serviceWorker' in navigator);
+        var isPushGranted = hasPushSupport && (Notification.permission === 'granted');
+        var pushStatusEl = null;
+
+        if (isPushGranted) {
+            pushStatusEl = $('<span class="badge badge-success d-inline-flex align-items-center py-1 px-2" style="font-size: 11px;" title="מכשיר זה רשום ומקבל התראות גם כשהאתר סגור או המסך נעול">' +
+                '<i class="fas fa-bell ml-1"></i> התראות מסך נעילה פעילות' +
+                '</span>');
+        } else if (hasPushSupport) {
+            pushStatusEl = $('<button type="button" class="btn btn-sm btn-outline-warning" title="לחץ להפעלת התראות Push במכשיר זה">' +
+                '<i class="fas fa-bell-slash ml-1"></i> הפעל התראות מסך נעילה' +
+                '</button>').click(function () {
+                Notification.requestPermission().then(function (perm) {
+                    if (perm === 'granted' && typeof notificationsManager !== 'undefined' && notificationsManager.syncPushSubscription) {
+                        notificationsManager.syncPushSubscription().then(function () {
+                            that.refreshDialogContent();
+                        });
+                    } else {
+                        that.refreshDialogContent();
+                    }
+                });
+            });
+        }
+
+        if (pushStatusEl) {
+            actions.append(pushStatusEl);
+        }
         actions.append(changeNameBtn, logoutBtn, deleteAccountBtn);
         header.append(userInfo, actions);
 
@@ -752,6 +784,11 @@ var PersonalArea = (function () {
                     tag: notifRef.id
                 }).then(function (res) {
                     console.log('Friend request push dispatch response:', res);
+                    if (res && res.sent > 0) {
+                        alert('בקשת החברות נשלחה בהצלחה!\nהתראת Push נמסרה למכשיר הנמען (' + res.sent + ' מכשיר/ים מחובר/ים).');
+                    } else if (res && res.reason === 'no_active_subscriptions') {
+                        alert('בקשת החברות נשלחה בהצלחה!\n\nשים לב: המשתמש הנמען טרם הפעיל התראות Push במכשירו. הבקשה ממתינה לו בתוך האתר, אך לא נשלחה התראה למסך נעילה.');
+                    }
                 });
             }
         }).catch(function (err) {
@@ -807,6 +844,9 @@ var PersonalArea = (function () {
                     tag: notifRef.id
                 }).then(function (res) {
                     console.log('Friend request accept push dispatch response:', res);
+                    if (res && res.sent > 0) {
+                        alert('אישור בקשת החברות נקלט בהצלחה והתראת Push נמסרה לחבר!');
+                    }
                 });
             }
         }).catch(function (err) {
