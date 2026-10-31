@@ -597,7 +597,13 @@ var PersonalArea = (function () {
                     if (friends.indexOf(userObj.uid) !== -1) {
                         actions.append($('<span class="badge badge-success">חברים</span>'));
                     } else if (outgoing.indexOf(userObj.uid) !== -1) {
-                        actions.append($('<span class="badge badge-secondary">בקשה נשלחה</span>'));
+                        var cancelBtn = $('<button type="button" class="btn btn-sm btn-outline-secondary">' +
+                            '<i class="fas fa-undo ml-1"></i> בטל בקשה' +
+                            '</button>').click(function () {
+                            cancelBtn.prop('disabled', true);
+                            that.cancelFriendRequest(userObj.uid);
+                        });
+                        actions.append(cancelBtn);
                     } else if (incoming.indexOf(userObj.uid) !== -1) {
                         var acceptNowBtn = $('<button type="button" class="btn btn-sm btn-success">' +
                             '<i class="fas fa-check"></i> אשר בקשה' +
@@ -676,7 +682,34 @@ var PersonalArea = (function () {
             });
     };
 
+    PersonalArea.prototype.cancelFriendRequest = function (targetUid) {
+        if (!this.currentUser || !this.firestoreDb || !targetUid) {
+            return;
+        }
+
+        var that = this;
+        var myUid = this.currentUser.uid;
+        var batch = this.firestoreDb.batch();
+        var myRef = this.firestoreDb.collection('users').doc(myUid);
+        var targetRef = this.firestoreDb.collection('users').doc(targetUid);
+
+        batch.set(myRef, {
+            outgoingRequests: firebase.firestore.FieldValue.arrayRemove(targetUid)
+        }, { merge: true });
+
+        batch.set(targetRef, {
+            incomingRequests: firebase.firestore.FieldValue.arrayRemove(myUid)
+        }, { merge: true });
+
+        batch.commit().then(function () {
+            that.refreshDialogContent();
+        }).catch(function (err) {
+            alert('שגיאה בביטול בקשת החברות: ' + err.message);
+        });
+    };
+
     PersonalArea.prototype.sendFriendRequest = function (targetUid) {
+        var that = this;
         if (!this.currentUser || !this.firestoreDb || !targetUid) {
             return;
         }
@@ -708,14 +741,17 @@ var PersonalArea = (function () {
         });
 
         batch.commit().then(function () {
+            that.refreshDialogContent();
             if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
-                NotificationsManager.sendPush(targetUid, {
+                return NotificationsManager.sendPush(targetUid, {
                     title: 'CheeseMate',
                     body: requestMsg,
                     icon: '/icons/android-chrome-192x192.png',
                     badge: '/icons/favicon-32x32.png',
                     url: '/?tab=friends',
                     tag: notifRef.id
+                }).then(function (res) {
+                    console.log('Friend request push dispatch response:', res);
                 });
             }
         }).catch(function (err) {
@@ -724,6 +760,7 @@ var PersonalArea = (function () {
     };
 
     PersonalArea.prototype.acceptFriendRequest = function (requesterUid) {
+        var that = this;
         if (!this.currentUser || !this.firestoreDb || !requesterUid) {
             return;
         }
@@ -759,14 +796,17 @@ var PersonalArea = (function () {
         });
 
         batch.commit().then(function () {
+            that.refreshDialogContent();
             if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
-                NotificationsManager.sendPush(requesterUid, {
+                return NotificationsManager.sendPush(requesterUid, {
                     title: 'CheeseMate',
                     body: acceptMsg,
                     icon: '/icons/android-chrome-192x192.png',
                     badge: '/icons/favicon-32x32.png',
                     url: '/?tab=friends',
                     tag: notifRef.id
+                }).then(function (res) {
+                    console.log('Friend request accept push dispatch response:', res);
                 });
             }
         }).catch(function (err) {
