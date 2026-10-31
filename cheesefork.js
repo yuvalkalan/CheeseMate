@@ -1019,11 +1019,7 @@
             element: $('#top-navbar-notifications'),
             badgeElement: $('#notifications-badge'),
             listElement: $('#notifications-list-container'),
-            markAllBtn: $('#notifications-mark-all-read'),
-            browserPromptElement: $('#notifications-browser-prompt'),
-            enableBrowserBtn: $('#notifications-enable-browser-btn'),
-            testPushBtn: $('#notifications-test-push-btn'),
-            testFriendRequestBtn: $('#notifications-test-friend-request-btn')
+            markAllBtn: $('#notifications-mark-all-read')
         });
 
         watchCourseStudentCounts();

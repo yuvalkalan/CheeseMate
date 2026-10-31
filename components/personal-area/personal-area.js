@@ -296,12 +296,12 @@ var PersonalArea = (function () {
         var pushStatusEl = null;
 
         if (isPushGranted) {
-            pushStatusEl = $('<span class="badge badge-success d-inline-flex align-items-center py-1 px-2" style="font-size: 11px;" title="מכשיר זה רשום ומקבל התראות גם כשהאתר סגור או המסך נעול">' +
-                '<i class="fas fa-bell ml-1"></i> התראות מסך נעילה פעילות' +
+            pushStatusEl = $('<span class="badge badge-success d-inline-flex align-items-center py-1 px-2" style="font-size: 11px;" title="מכשיר זה רשום ומקבל התראות">' +
+                '<i class="fas fa-bell ml-1"></i> התראות פעילות' +
                 '</span>');
         } else if (hasPushSupport) {
-            pushStatusEl = $('<button type="button" class="btn btn-sm btn-outline-warning" title="לחץ להפעלת התראות Push במכשיר זה">' +
-                '<i class="fas fa-bell-slash ml-1"></i> הפעל התראות מסך נעילה' +
+            pushStatusEl = $('<button type="button" class="btn btn-sm btn-outline-warning" title="לחץ להפעלת התראות במכשיר זה">' +
+                '<i class="fas fa-bell-slash ml-1"></i> הפעל התראות' +
                 '</button>').click(function () {
                 Notification.requestPermission().then(function (perm) {
                     if (perm === 'granted' && typeof notificationsManager !== 'undefined' && notificationsManager.syncPushSubscription) {
@@ -784,11 +784,6 @@ var PersonalArea = (function () {
                     tag: notifRef.id
                 }).then(function (res) {
                     console.log('Friend request push dispatch response:', res);
-                    if (res && res.sent > 0) {
-                        alert('בקשת החברות נשלחה בהצלחה!\nהתראת Push נמסרה למכשיר הנמען (' + res.sent + ' מכשיר/ים מחובר/ים).');
-                    } else if (res && res.reason === 'no_active_subscriptions') {
-                        alert('בקשת החברות נשלחה בהצלחה!\n\nשים לב: המשתמש הנמען טרם הפעיל התראות Push במכשירו. הבקשה ממתינה לו בתוך האתר, אך לא נשלחה התראה למסך נעילה.');
-                    }
                 });
             }
         }).catch(function (err) {
@@ -844,9 +839,6 @@ var PersonalArea = (function () {
                     tag: notifRef.id
                 }).then(function (res) {
                     console.log('Friend request accept push dispatch response:', res);
-                    if (res && res.sent > 0) {
-                        alert('אישור בקשת החברות נקלט בהצלחה והתראת Push נמסרה לחבר!');
-                    }
                 });
             }
         }).catch(function (err) {
