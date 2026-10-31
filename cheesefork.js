@@ -1672,7 +1672,6 @@
     window.cheeseMateViewFriendSchedule = function (friendUid, friendName) {
         watchFriendSchedule(friendUid, friendName);
     };
-    window.cheeseForkViewFriendSchedule = window.cheeseMateViewFriendSchedule;
 
     function watchSavedSchedule(onLoadedFunc) {
         var doc = firestoreAuthenticatedUserDoc();
@@ -2025,27 +2024,13 @@
 
     function firestoreAuthenticatedUserDoc() {
         if (typeof firebase !== 'undefined' && firebase.auth().currentUser !== null) {
-            var doc = firestoreDb.collection('users').doc(firebase.auth().currentUser.uid);
-
-            var semestersWithoutSubCollection = ['201701', '201702', '201703', '201801'];
-            if (semestersWithoutSubCollection.indexOf(currentSemester) === -1) {
-                doc = doc.collection('semesters').doc(currentSemester);
-            }
-
-            return doc;
+            return firestoreDb.collection('users').doc(firebase.auth().currentUser.uid).collection('semesters').doc(currentSemester);
         }
         return null;
     }
 
     function firestoreUserDoc(userId) {
-        var doc = firestoreDb.collection('users').doc(userId);
-
-        var semestersWithoutSubCollection = ['201701', '201702', '201703', '201801'];
-        if (semestersWithoutSubCollection.indexOf(currentSemester) === -1) {
-            doc = doc.collection('semesters').doc(currentSemester);
-        }
-
-        return doc;
+        return firestoreDb.collection('users').doc(userId).collection('semesters').doc(currentSemester);
     }
 
     function firestoreDisplayNameDecode(displayName) {

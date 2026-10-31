@@ -186,12 +186,7 @@
             allUsers = [];
             snapshot.forEach(function (doc) {
                 var d = doc.data() || {};
-                var level = 0;
-                if (typeof d.level === 'number') {
-                    level = d.level;
-                } else if (d.level === '1' || d.level === '0') {
-                    level = parseInt(d.level, 10);
-                }
+                var level = (typeof d.level === 'number') ? d.level : 0;
 
                 var email = d.email || '';
                 if (!email && doc.id === (currentUser ? currentUser.uid : '')) {

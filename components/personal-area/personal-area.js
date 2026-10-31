@@ -444,7 +444,7 @@ var PersonalArea = (function () {
                 if (that.dialog) {
                     that.dialog.close();
                 }
-                var viewFn = window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule;
+                var viewFn = window.cheeseMateViewFriendSchedule;
                 if (viewFn && friend.uid) {
                     viewFn(friend.uid, friend.username);
                 }

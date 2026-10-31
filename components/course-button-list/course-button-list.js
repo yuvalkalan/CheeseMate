@@ -865,7 +865,7 @@ var CourseButtonList = (function () {
 
                 var doView = function () {
                     $('.modal').modal('hide');
-                    var viewFn = window.cheeseMateViewFriendSchedule || window.cheeseForkViewFriendSchedule;
+                    var viewFn = window.cheeseMateViewFriendSchedule;
                     if (viewFn && f.uid) {
                         viewFn(f.uid, friendName);
                     }
