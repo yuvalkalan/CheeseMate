@@ -4,7 +4,7 @@
 
 // eslint-disable-next-line no-unused-vars
 var NotificationsManager = (function () {
-    var VAPID_PUBLIC_KEY = 'BF758LqnJZ0G2xGLLZMsJVkY77-kfftlG5BnStq52FkfeDb64K0eywSvAjyaZlY-8zbMzjM9_AfWQW7hr4rVvCo';
+    var VAPID_PUBLIC_KEY = 'BKg-LrqshpQPZ-hamsMkdCoo7ABvSFbBZpHcnlkYqpqRJ4M8UdI9WBqd79fL7YnIr0PbyKdaHhI-uSAhY4mL7hs';
     var WORKER_URL = 'https://cheesemate-push.yuvalkalan.workers.dev';
 
     function urlBase64ToUint8Array(base64String) {
@@ -89,13 +89,26 @@ var NotificationsManager = (function () {
             that.swRegistration = reg;
             return reg.pushManager.getSubscription();
         }).then(function (existingSub) {
-            if (existingSub) {
+            var storedKey = localStorage.getItem('cheesemate_vapid_key');
+            if (existingSub && storedKey === VAPID_PUBLIC_KEY) {
                 return existingSub;
             }
-            var appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-            return that.swRegistration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: appServerKey
+
+            var unsubPromise = existingSub ? existingSub.unsubscribe().catch(function () { return true; }) : Promise.resolve(true);
+
+            return unsubPromise.then(function () {
+                var appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+                return that.swRegistration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: appServerKey
+                }).then(function (newSub) {
+                    try {
+                        localStorage.setItem('cheesemate_vapid_key', VAPID_PUBLIC_KEY);
+                    } catch (e) {
+                        // Ignore quota/private mode errors
+                    }
+                    return newSub;
+                });
             });
         }).then(function (subscription) {
             if (!subscription || !that.currentUser) {

@@ -30,7 +30,7 @@ self.addEventListener('push', (event) => {
     const title = payload.title || 'CheeseMate';
     const options = {
         body: payload.body || 'התקבלה הודעה חדשה ב-CheeseMate',
-        icon: payload.icon || '/icons/favicon-32x32.png',
+        icon: payload.icon || '/icons/android-chrome-192x192.png',
         badge: payload.badge || '/icons/favicon-32x32.png',
         tag: payload.tag || ('cheesemate-' + Date.now()),
         renotify: true,

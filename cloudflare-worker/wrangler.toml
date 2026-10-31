@@ -8,6 +8,6 @@ kv_namespaces = [
 ]
 
 [vars]
-VAPID_PUBLIC_KEY = "BF758LqnJZ0G2xGLLZMsJVkY77-kfftlG5BnStq52FkfeDb64K0eywSvAjyaZlY-8zbMzjM9_AfWQW7hr4rVvCo"
-VAPID_PRIVATE_KEY = "sGazapVG1lM-r4AhUKYJHop1MYbGqSufb2MmZv6DuqI"
+VAPID_PUBLIC_KEY = "BKg-LrqshpQPZ-hamsMkdCoo7ABvSFbBZpHcnlkYqpqRJ4M8UdI9WBqd79fL7YnIr0PbyKdaHhI-uSAhY4mL7hs"
+VAPID_PRIVATE_KEY = "aVDZhWCUmW_Z3f40UIDmU62JFw5EsrqmoVJrpvmFcOk"
 VAPID_SUBJECT = "mailto:yuvalkalan@gmail.com"

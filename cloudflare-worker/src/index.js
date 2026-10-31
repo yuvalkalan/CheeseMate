@@ -119,70 +119,90 @@ export default {
           return jsonResponse({ success: true, sent: 0, reason: 'no_active_subscriptions' });
         }
 
-        // Support delay before sending (e.g. for testing lock screen notifications)
-        if (body.delaySeconds && typeof body.delaySeconds === 'number' && body.delaySeconds > 0) {
-          const delayMs = Math.min(body.delaySeconds, 30) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
+        const delaySeconds = (body.delaySeconds && typeof body.delaySeconds === 'number' && body.delaySeconds > 0)
+          ? Math.min(body.delaySeconds, 30)
+          : 0;
 
         const pushPayload = JSON.stringify({
           title: body.title || 'CheeseMate',
           body: body.body || '',
-          icon: body.icon || '/logo.png',
+          icon: body.icon || '/icons/android-chrome-192x192.png',
           badge: body.badge || '/icons/favicon-32x32.png',
           url: body.url || '/',
           tag: body.tag || `cheesemate-${Date.now()}`,
           timestamp: Date.now(),
         });
 
-        let sent = 0;
-        const deadEndpoints = new Set();
-        const results = [];
+        const dispatch = async () => {
+          if (delaySeconds > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+          }
 
-        for (const sub of subscriptions) {
-          try {
-            const pushMessage = {
-              data: pushPayload,
-              options: {
-                ttl: body.ttl || 86400, // 24 hours
-              },
-            };
+          let sent = 0;
+          const deadEndpoints = new Set();
+          const results = [];
 
-            const payload = await buildPushPayload(pushMessage, sub, vapid);
-            const res = await fetch(sub.endpoint, payload);
+          for (const sub of subscriptions) {
+            try {
+              const pushMessage = {
+                data: pushPayload,
+                options: {
+                  ttl: body.ttl || 86400, // 24 hours
+                },
+              };
 
-            if (res.status === 404 || res.status === 410) {
-              // Endpoint has expired or unsubscribed
-              deadEndpoints.add(sub.endpoint);
-              results.push({ endpoint: sub.endpoint, status: res.status, expired: true });
-            } else if (res.ok) {
-              sent++;
-              results.push({ endpoint: sub.endpoint, status: res.status, ok: true });
-            } else {
-              const errText = await res.text().catch(() => '');
-              results.push({ endpoint: sub.endpoint, status: res.status, error: errText });
+              const payload = await buildPushPayload(pushMessage, sub, vapid);
+              const res = await fetch(sub.endpoint, payload);
+
+              if (res.status === 404 || res.status === 410) {
+                // Endpoint has expired or unsubscribed
+                deadEndpoints.add(sub.endpoint);
+                results.push({ endpoint: sub.endpoint, status: res.status, expired: true });
+              } else if (res.status === 403) {
+                const errText = await res.text().catch(() => '');
+                if (errText.includes('VAPID') || errText.includes('credentials')) {
+                  deadEndpoints.add(sub.endpoint);
+                }
+                results.push({ endpoint: sub.endpoint, status: res.status, error: errText });
+              } else if (res.ok) {
+                sent++;
+                results.push({ endpoint: sub.endpoint, status: res.status, ok: true });
+              } else {
+                const errText = await res.text().catch(() => '');
+                results.push({ endpoint: sub.endpoint, status: res.status, error: errText });
+              }
+            } catch (err) {
+              results.push({ endpoint: sub.endpoint, error: err.message });
             }
-          } catch (err) {
-            results.push({ endpoint: sub.endpoint, error: err.message });
           }
+
+          // Clean up dead subscriptions if any
+          if (deadEndpoints.size > 0) {
+            const remaining = subscriptions.filter((s) => !deadEndpoints.has(s.endpoint));
+            if (remaining.length === 0) {
+              await env.SUBSCRIPTIONS.delete(kvKey);
+            } else {
+              await env.SUBSCRIPTIONS.put(kvKey, JSON.stringify(remaining));
+            }
+          }
+
+          return { sent, total: subscriptions.length, pruned: deadEndpoints.size, results };
+        };
+
+        if (delaySeconds > 0) {
+          ctx.waitUntil(dispatch());
+          return jsonResponse({
+            success: true,
+            scheduled: true,
+            delaySeconds,
+            total: subscriptions.length,
+          });
         }
 
-        // Clean up dead subscriptions if any
-        if (deadEndpoints.size > 0) {
-          const remaining = subscriptions.filter((s) => !deadEndpoints.has(s.endpoint));
-          if (remaining.length === 0) {
-            await env.SUBSCRIPTIONS.delete(kvKey);
-          } else {
-            await env.SUBSCRIPTIONS.put(kvKey, JSON.stringify(remaining));
-          }
-        }
-
+        const outcome = await dispatch();
         return jsonResponse({
           success: true,
-          sent,
-          total: subscriptions.length,
-          pruned: deadEndpoints.size,
-          results,
+          ...outcome,
         });
       }
 
