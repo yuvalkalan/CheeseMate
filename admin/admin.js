@@ -23,6 +23,12 @@
     var allUsers = [];
     var userToDelete = null;
 
+    // Mapping of permission levels: numeric level -> { level, name, description }
+    var permissionLevelsMap = {
+        0: { level: 0, name: 'user', description: 'משתמש רגיל' },
+        1: { level: 1, name: 'admin', description: 'מנהל מערכת' }
+    };
+
     // DOM Elements
     var loadingState = $('#admin-loading-state');
     var loginState = $('#admin-login-state');
@@ -69,11 +75,54 @@
     }
 
     function isAdministrator(user, data) {
-        if (!user) return false;
-        if (data && (data.role === 'Administrator' || data.role === 'admin')) {
+        if (!user || !data) return false;
+        if (data.level === 1 || data.level === '1') {
+            return true;
+        }
+        if (data.role === 'Administrator' || data.role === 'admin') {
             return true;
         }
         return false;
+    }
+
+    // Load and seed permissionLevels collection
+    function loadPermissionLevels() {
+        return db.collection('permissionLevels').get()
+            .then(function (snapshot) {
+                if (snapshot.empty) {
+                    var batch = db.batch();
+                    batch.set(db.collection('permissionLevels').doc('0'), {
+                        level: 0,
+                        name: 'user',
+                        description: 'משתמש רגיל'
+                    });
+                    batch.set(db.collection('permissionLevels').doc('1'), {
+                        level: 1,
+                        name: 'admin',
+                        description: 'מנהל מערכת'
+                    });
+                    return batch.commit().then(function () {
+                        console.log('Seeded permissionLevels collection with defaults (0: user, 1: admin).');
+                    }).catch(function (seedErr) {
+                        console.warn('Could not seed permissionLevels:', seedErr);
+                    });
+                } else {
+                    snapshot.forEach(function (doc) {
+                        var data = doc.data() || {};
+                        var lvl = typeof data.level === 'number' ? data.level : parseInt(doc.id, 10);
+                        if (!isNaN(lvl)) {
+                            permissionLevelsMap[lvl] = {
+                                level: lvl,
+                                name: data.name || (lvl === 1 ? 'admin' : 'user'),
+                                description: data.description || ''
+                            };
+                        }
+                    });
+                }
+            })
+            .catch(function (err) {
+                console.warn('Error fetching permissionLevels, using fallback map:', err);
+            });
     }
 
     // Auth State Observer
@@ -94,7 +143,9 @@
                     var displayName = data.username || data.displayName || user.displayName || user.email || 'מנהל';
                     userNameHeader.text(displayName);
                     switchView('dashboard');
-                    loadAllUsers();
+                    loadPermissionLevels().then(function () {
+                        loadAllUsers();
+                    });
                 } else {
                     deniedUserEmail.text(user.email || user.uid);
                     switchView('denied');
@@ -135,45 +186,52 @@
     function loadAllUsers() {
         refreshBtn.prop('disabled', true).find('i').addClass('fa-spin');
 
-        db.collection('users').get()
-            .then(function (snapshot) {
-                allUsers = [];
-                snapshot.forEach(function (doc) {
-                    var d = doc.data() || {};
-                    var role = d.role || 'user';
-                    if (role === 'admin') role = 'Administrator';
+        loadPermissionLevels().then(function () {
+            return db.collection('users').get();
+        }).then(function (snapshot) {
+            allUsers = [];
+            snapshot.forEach(function (doc) {
+                var d = doc.data() || {};
+                var level = 0;
+                if (typeof d.level === 'number') {
+                    level = d.level;
+                } else if (d.level === '1' || d.level === '0') {
+                    level = parseInt(d.level, 10);
+                } else if (d.role === 'Administrator' || d.role === 'admin') {
+                    level = 1;
+                }
 
-                    var email = d.email || '';
-                    if (!email && doc.id === (currentUser ? currentUser.uid : '')) {
-                        email = currentUser.email || '';
-                    }
+                var email = d.email || '';
+                if (!email && doc.id === (currentUser ? currentUser.uid : '')) {
+                    email = currentUser.email || '';
+                }
 
-                    allUsers.push({
-                        uid: doc.id,
-                        username: d.username || d.displayName || (email ? email.split('@')[0] : 'ללא שם'),
-                        email: email,
-                        role: role,
-                        friends: Array.isArray(d.friends) ? d.friends : [],
-                        incomingRequests: Array.isArray(d.incomingRequests) ? d.incomingRequests : [],
-                        outgoingRequests: Array.isArray(d.outgoingRequests) ? d.outgoingRequests : [],
-                        data: d
-                    });
+                allUsers.push({
+                    uid: doc.id,
+                    username: d.username || d.displayName || (email ? email.split('@')[0] : 'ללא שם'),
+                    email: email,
+                    level: level,
+                    role: level === 1 ? 'admin' : 'user',
+                    friends: Array.isArray(d.friends) ? d.friends : [],
+                    incomingRequests: Array.isArray(d.incomingRequests) ? d.incomingRequests : [],
+                    outgoingRequests: Array.isArray(d.outgoingRequests) ? d.outgoingRequests : [],
+                    data: d
                 });
-
-                allUsers.sort(function (a, b) {
-                    if (a.role === 'Administrator' && b.role !== 'Administrator') return -1;
-                    if (a.role !== 'Administrator' && b.role === 'Administrator') return 1;
-                    return a.username.localeCompare(b.username, 'he', { sensitivity: 'base' });
-                });
-
-                updateStats();
-                renderUsersTable();
-                refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
-            })
-            .catch(function (err) {
-                refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
-                alert('שגיאה בטעינת המשתמשים: ' + err.message);
             });
+
+            allUsers.sort(function (a, b) {
+                if (a.level === 1 && b.level !== 1) return -1;
+                if (a.level !== 1 && b.level === 1) return 1;
+                return a.username.localeCompare(b.username, 'he', { sensitivity: 'base' });
+            });
+
+            updateStats();
+            renderUsersTable();
+            refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
+        }).catch(function (err) {
+            refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
+            alert('שגיאה בטעינת המשתמשים: ' + err.message);
+        });
     }
 
     refreshBtn.click(loadAllUsers);
@@ -184,7 +242,7 @@
         var regulars = 0;
 
         allUsers.forEach(function (u) {
-            if (u.role === 'Administrator' || u.role === 'admin') {
+            if (u.level === 1) {
                 admins++;
             } else {
                 regulars++;
@@ -212,10 +270,14 @@
 
         var filtered = allUsers.filter(function (u) {
             var matchesRole = true;
-            if (selectedRole === 'Administrator') {
-                matchesRole = (u.role === 'Administrator' || u.role === 'admin');
+            if (selectedRole === '1') {
+                matchesRole = (u.level === 1);
+            } else if (selectedRole === '0') {
+                matchesRole = (u.level === 0);
+            } else if (selectedRole === 'Administrator' || selectedRole === 'admin') {
+                matchesRole = (u.level === 1);
             } else if (selectedRole === 'user') {
-                matchesRole = (u.role === 'user');
+                matchesRole = (u.level === 0);
             }
 
             if (!matchesRole) return false;
@@ -240,7 +302,12 @@
 
         filtered.forEach(function (u) {
             var isCurrent = currentUser && currentUser.uid === u.uid;
-            var isAdmin = (u.role === 'Administrator' || u.role === 'admin');
+            var isAdmin = (u.level === 1);
+            var levelInfo = permissionLevelsMap[u.level] || {
+                level: u.level,
+                name: u.level === 1 ? 'admin' : 'user',
+                description: u.level === 1 ? 'מנהל מערכת' : 'משתמש רגיל'
+            };
 
             var avatarChar = u.username ? u.username.charAt(0).toUpperCase() : '?';
             var avatarBg = isAdmin ? '#e74a3b' : '#4e73df';
@@ -284,23 +351,25 @@
                 });
             uidTd.append(uidBadge);
 
-            // 4. Role column with dropdown selector
+            // 4. Role / Level column with dropdown selector
             var roleTd = $('<td></td>');
             var roleSelect = $('<select class="custom-select custom-select-sm" style="width: auto; min-width: 140px;"></select>');
-            roleSelect.append('<option value="user"' + (!isAdmin ? ' selected' : '') + '>משתמש (user)</option>');
-            roleSelect.append('<option value="Administrator"' + (isAdmin ? ' selected' : '') + '>מנהל (Administrator)</option>');
+            var userLevelName = (permissionLevelsMap[0] ? permissionLevelsMap[0].name : 'user');
+            var adminLevelName = (permissionLevelsMap[1] ? permissionLevelsMap[1].name : 'admin');
+            roleSelect.append('<option value="0"' + (!isAdmin ? ' selected' : '') + '>0 - ' + userLevelName + '</option>');
+            roleSelect.append('<option value="1"' + (isAdmin ? ' selected' : '') + '>1 - ' + adminLevelName + '</option>');
 
             if (isCurrent) {
                 roleSelect.prop('disabled', true).attr('title', 'לא ניתן לשנות את הרשאת החשבון המחובר');
             } else {
                 roleSelect.change(function () {
-                    var newRole = $(this).val();
-                    changeUserRole(u.uid, newRole, roleSelect);
+                    var newLevel = parseInt($(this).val(), 10);
+                    changeUserLevel(u.uid, newLevel, roleSelect);
                 });
             }
 
             var roleBadge = $('<span class="badge mr-2 ' + (isAdmin ? 'badge-role-admin' : 'badge-role-user') + '"></span>')
-                .text(isAdmin ? 'Administrator' : 'user');
+                .text(levelInfo.name + ' (' + u.level + ')');
 
             var roleWrapper = $('<div class="d-flex align-items-center"></div>');
             roleWrapper.append(roleBadge, roleSelect);
@@ -334,17 +403,22 @@
     searchInput.on('input', renderUsersTable);
     roleFilter.change(renderUsersTable);
 
-    // Change User Role
-    function changeUserRole(targetUid, newRole, selectEl) {
+    // Change User Level
+    function changeUserLevel(targetUid, newLevel, selectEl) {
         selectEl.prop('disabled', true);
+        var numLevel = parseInt(newLevel, 10);
+        var roleString = numLevel === 1 ? 'admin' : 'user';
+
         db.collection('users').doc(targetUid).update({
-            role: newRole
+            level: numLevel,
+            role: roleString
         }).then(function () {
             selectEl.prop('disabled', false);
             // Update in memory
             var userObj = allUsers.find(function (u) { return u.uid === targetUid; });
             if (userObj) {
-                userObj.role = newRole;
+                userObj.level = numLevel;
+                userObj.role = roleString;
             }
             updateStats();
             renderUsersTable();

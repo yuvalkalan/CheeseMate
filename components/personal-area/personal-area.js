@@ -10,7 +10,8 @@ var PersonalArea = (function () {
         this.onUsernameChanged = options.onUsernameChanged || function () {};
         this.onIncomingRequestsCountChanged = options.onIncomingRequestsCountChanged || function () {};
         this.onFriendsChanged = options.onFriendsChanged || function () {};
-        this.onRoleChanged = options.onRoleChanged || function () {};
+        this.onLevelChanged = options.onLevelChanged || options.onRoleChanged || function () {};
+        this.onRoleChanged = this.onLevelChanged;
 
         this.currentUser = null;
         this.userDocData = null;
@@ -45,16 +46,22 @@ var PersonalArea = (function () {
         return deriveDefaultUsername(this.currentUser);
     };
 
-    PersonalArea.prototype.getRole = function () {
-        if (this.userDocData && this.userDocData.role) {
-            return this.userDocData.role;
+    PersonalArea.prototype.getLevel = function () {
+        if (this.userDocData && typeof this.userDocData.level === 'number') {
+            return this.userDocData.level;
         }
-        return 'user';
+        if (this.userDocData && (this.userDocData.role === 'admin' || this.userDocData.role === 'Administrator')) {
+            return 1;
+        }
+        return 0; // 0 for "user"
+    };
+
+    PersonalArea.prototype.getRole = function () {
+        return this.getLevel() === 1 ? 'admin' : 'user';
     };
 
     PersonalArea.prototype.isAdmin = function () {
-        var r = this.getRole();
-        return r === 'Administrator' || r === 'admin';
+        return this.getLevel() === 1;
     };
 
     PersonalArea.prototype.onUserSignedIn = function (user) {
@@ -71,11 +78,16 @@ var PersonalArea = (function () {
             var data = snapshot.exists ? snapshot.data() : {};
             var defaultUsername = deriveDefaultUsername(user);
             var emailLower = (user.email || '').toLowerCase();
-            var roleToSave = data.role || 'user';
+            var levelToSave = 0;
+            if (typeof data.level === 'number') {
+                levelToSave = data.level;
+            } else if (data.role === 'admin' || data.role === 'Administrator') {
+                levelToSave = 1;
+            }
 
             var needsInit = !snapshot.exists ||
                 !data.username ||
-                !data.role ||
+                typeof data.level !== 'number' ||
                 data.usernameLower !== (data.username || defaultUsername).toLowerCase() ||
                 (emailLower && data.email !== emailLower) ||
                 data.uid !== user.uid;
@@ -88,7 +100,7 @@ var PersonalArea = (function () {
                     username: usernameToSave,
                     usernameLower: usernameToSave.toLowerCase(),
                     displayName: usernameToSave,
-                    role: roleToSave
+                    level: levelToSave
                 };
                 if (!Array.isArray(data.friends)) {
                     initUpdate.friends = [];
@@ -106,8 +118,8 @@ var PersonalArea = (function () {
             that.userDocData = data;
             that.profilesCache[user.uid] = data;
 
-            var currentRole = data.role || 'user';
-            that.onRoleChanged(currentRole);
+            var currentLevel = (typeof data.level === 'number') ? data.level : levelToSave;
+            that.onLevelChanged(currentLevel);
 
             var username = that.getCurrentUsername();
             that.onUsernameChanged(username);

@@ -93,7 +93,7 @@
                     </div>
                     <h3 class="card-title font-weight-bold text-danger mb-2">אין הרשאת גישה</h3>
                     <p class="text-muted mb-4">
-                        החשבון המחובר (<span id="denied-user-email" class="font-weight-bold"></span>) מוגדר כ-<strong>משתמש רגיל (user)</strong> ואין לו הרשאות מנהל מערכת (Administrator).
+                        החשבון המחובר (<span id="denied-user-email" class="font-weight-bold"></span>) מוגדר ברמת הרשאה <strong>0 (משתמש רגיל - user)</strong> ואין לו הרשאות מנהל מערכת (רמה 1 - admin).
                     </p>
                     <div class="d-flex justify-content-center gap-2">
                         <a href="/" class="btn btn-primary ml-2">
@@ -133,7 +133,7 @@
                         <div class="card-body">
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
-                                    <div class="stat-label text-danger">מנהלי מערכת (Administrators)</div>
+                                    <div class="stat-label text-danger">מנהלי מערכת (רמה 1 - admin)</div>
                                     <div class="stat-value" id="stat-admin-users">0</div>
                                 </div>
                                 <div class="col-auto">
@@ -149,7 +149,7 @@
                         <div class="card-body">
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
-                                    <div class="stat-label text-success">משתמשים רגילים (Users)</div>
+                                    <div class="stat-label text-success">משתמשים רגילים (רמה 0 - user)</div>
                                     <div class="stat-value" id="stat-regular-users">0</div>
                                 </div>
                                 <div class="col-auto">
@@ -190,9 +190,9 @@
                         </div>
                         <div class="col-md-5 col-lg-4 mb-2">
                             <select id="admin-role-filter" class="custom-select">
-                                <option value="all">כל דרגות ההרשאה</option>
-                                <option value="Administrator">מנהלי מערכת (Administrator) בלבד</option>
-                                <option value="user">משתמשים רגילים (user) בלבד</option>
+                                <option value="all">כל רמות ההרשאה</option>
+                                <option value="1">רמה 1 - מנהל (admin)</option>
+                                <option value="0">רמה 0 - משתמש (user)</option>
                             </select>
                         </div>
                     </div>
@@ -205,7 +205,7 @@
                                     <th>משתמש</th>
                                     <th>דוא״ל</th>
                                     <th>מזהה משתמש (UID)</th>
-                                    <th>דרגת הרשאה</th>
+                                    <th>רמת הרשאה (Level)</th>
                                     <th>חברים</th>
                                     <th class="text-center">פעולות</th>
                                 </tr>

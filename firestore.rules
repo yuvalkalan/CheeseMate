@@ -14,7 +14,8 @@ rules_version = '2';
 //   - username: string or null (optional, max 200 chars) - user's chosen username in Personal Area
 //   - usernameLower: string or null (optional, max 200 chars) - lowercase username for case-insensitive lookup
 //   - email: string or null (optional, max 254 chars) - user's email address for friend lookup
-//   - role: string (optional, one of 'user', 'Administrator', 'admin') - authorization level / role
+//   - level: number (optional, 0 = user, 1 = admin) - user authorization level
+//   - role: string (optional, one of 'user', 'Administrator', 'admin') - legacy authorization role (backward compatibility)
 //   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
 //   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
 //   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
@@ -66,6 +67,13 @@ rules_version = '2';
 //       - postText: string (required, max 20000 chars)
 //       - postAuthor: string (required, max 200 chars)
 //
+// Collection: permissionLevels
+// Document ID: {levelId}
+// Fields:
+//   - level: number (required) - numeric permission level identifier (0 = user, 1 = admin)
+//   - name: string (required, 1..50 chars) - display name of the permission level
+//   - description: string (optional, max 200 chars) - description of permissions granted
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -85,19 +93,26 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if the user is an Administrator based on the role in their user document
+    // Check if the user is an Administrator based on the level (or legacy role) in their user document
     function isAdmin() {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'];
+        (
+          (('level' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level == 1) ||
+          (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'])
+        );
     }
 
-    // Ensure role is not modified by non-admin users on update
-    function isRoleUnchangedForNonAdmin() {
-      return isAdmin() ||
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
-        (!('role' in resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user'));
+    // Ensure permission level (and legacy role) are not modified by non-admin users on update
+    function isLevelUnchangedForNonAdmin() {
+      return isAdmin() || (
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
+         (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
+         (!('role' in resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user')))
+      );
     }
 
     // Validate required fields exist
@@ -144,6 +159,8 @@ service cloud.firestore {
         (!('email' in data) ||
          data.email == null ||
          (data.email is string && data.email.size() <= 254)) &&
+        (!('level' in data) ||
+         (data.level is number && (data.level == 0 || data.level == 1))) &&
         (!('role' in data) ||
          (data.role is string && (data.role in ['user', 'Administrator', 'admin']))) &&
         (!('friends' in data) ||
@@ -208,6 +225,15 @@ service cloud.firestore {
         isValidReportPost(data.posts[data.posts.size() - 1]);
     }
 
+    // Validate permission level document
+    function isValidPermissionLevelDoc(data) {
+      return hasOnlyAllowedFields(['level', 'name', 'description']) &&
+        hasRequiredFields(['level', 'name']) &&
+        data.level is number &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 200));
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -224,11 +250,12 @@ service cloud.firestore {
 
       allow create: if (isOwner(userId) || isAdmin()) &&
         isValidScheduleDoc(request.resource.data) &&
+        (!('level' in request.resource.data) || request.resource.data.level == 0 || isAdmin()) &&
         (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
 
       allow update: if (
         isAdmin() ||
-        (isOwner(userId) && isRoleUnchangedForNonAdmin()) ||
+        (isOwner(userId) && isLevelUnchangedForNonAdmin()) ||
         (isAuthenticated() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']))
       ) && isValidScheduleDoc(request.resource.data);
@@ -262,6 +289,12 @@ service cloud.firestore {
         // Recipient or administrator can delete notifications
         allow delete: if isOwner(userId) || isAdmin();
       }
+    }
+
+    // Permission levels collection, publicly readable, writable only by administrators
+    match /permissionLevels/{levelId} {
+      allow get, list: if true;
+      allow write: if isAdmin() && isValidPermissionLevelDoc(request.resource.data);
     }
 
     // Publicly readable course feedback, append-only for authenticated users
