@@ -18,6 +18,7 @@ rules_version = '2';
 //   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
 //   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
 //   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
+//   - pushSubscriptions: list of maps (optional, max 20 items) - Web Push subscriptions for the user's devices
 //
 // Subcollection: users/{userId}/semesters (and collectionGroup 'semesters')
 // Document ID: {semesterId} (e.g. "202601")
@@ -131,7 +132,7 @@ service cloud.firestore {
 
     // Validate user profile and friends document
     function isValidUserDoc(data) {
-      return hasOnlyAllowedFields(['uid', 'displayName', 'username', 'usernameLower', 'email', 'level', 'friends', 'incomingRequests', 'outgoingRequests']) &&
+      return hasOnlyAllowedFields(['uid', 'displayName', 'username', 'usernameLower', 'email', 'level', 'friends', 'incomingRequests', 'outgoingRequests', 'pushSubscriptions']) &&
         (!('uid' in data) ||
          data.uid == null ||
          (data.uid is string && data.uid.size() <= 128)) &&
@@ -154,7 +155,9 @@ service cloud.firestore {
         (!('incomingRequests' in data) ||
          (data.incomingRequests is list && data.incomingRequests.size() <= 500)) &&
         (!('outgoingRequests' in data) ||
-         (data.outgoingRequests is list && data.outgoingRequests.size() <= 500));
+         (data.outgoingRequests is list && data.outgoingRequests.size() <= 500)) &&
+        (!('pushSubscriptions' in data) ||
+         (data.pushSubscriptions is list && data.pushSubscriptions.size() <= 20));
     }
 
     // Validate semester schedule document (supports dynamic course and semester field keys)

@@ -1021,7 +1021,8 @@
             listElement: $('#notifications-list-container'),
             markAllBtn: $('#notifications-mark-all-read'),
             browserPromptElement: $('#notifications-browser-prompt'),
-            enableBrowserBtn: $('#notifications-enable-browser-btn')
+            enableBrowserBtn: $('#notifications-enable-browser-btn'),
+            testPushBtn: $('#notifications-test-push-btn')
         });
 
         watchCourseStudentCounts();
