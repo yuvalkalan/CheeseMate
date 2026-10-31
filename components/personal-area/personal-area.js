@@ -10,8 +10,7 @@ var PersonalArea = (function () {
         this.onUsernameChanged = options.onUsernameChanged || function () {};
         this.onIncomingRequestsCountChanged = options.onIncomingRequestsCountChanged || function () {};
         this.onFriendsChanged = options.onFriendsChanged || function () {};
-        this.onLevelChanged = options.onLevelChanged || options.onRoleChanged || function () {};
-        this.onRoleChanged = this.onLevelChanged;
+        this.onLevelChanged = options.onLevelChanged || function () {};
 
         this.currentUser = null;
         this.userDocData = null;
@@ -50,14 +49,7 @@ var PersonalArea = (function () {
         if (this.userDocData && typeof this.userDocData.level === 'number') {
             return this.userDocData.level;
         }
-        if (this.userDocData && (this.userDocData.role === 'admin' || this.userDocData.role === 'Administrator')) {
-            return 1;
-        }
         return 0; // 0 for "user"
-    };
-
-    PersonalArea.prototype.getRole = function () {
-        return this.getLevel() === 1 ? 'admin' : 'user';
     };
 
     PersonalArea.prototype.isAdmin = function () {
@@ -81,8 +73,6 @@ var PersonalArea = (function () {
             var levelToSave = 0;
             if (typeof data.level === 'number') {
                 levelToSave = data.level;
-            } else if (data.role === 'admin' || data.role === 'Administrator') {
-                levelToSave = 1;
             }
 
             var needsInit = !snapshot.exists ||

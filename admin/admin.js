@@ -76,13 +76,7 @@
 
     function isAdministrator(user, data) {
         if (!user || !data) return false;
-        if (data.level === 1 || data.level === '1') {
-            return true;
-        }
-        if (data.role === 'Administrator' || data.role === 'admin') {
-            return true;
-        }
-        return false;
+        return data.level === 1 || data.level === '1';
     }
 
     // Load and seed permissionLevels collection
@@ -197,8 +191,6 @@
                     level = d.level;
                 } else if (d.level === '1' || d.level === '0') {
                     level = parseInt(d.level, 10);
-                } else if (d.role === 'Administrator' || d.role === 'admin') {
-                    level = 1;
                 }
 
                 var email = d.email || '';
@@ -211,7 +203,6 @@
                     username: d.username || d.displayName || (email ? email.split('@')[0] : 'ללא שם'),
                     email: email,
                     level: level,
-                    role: level === 1 ? 'admin' : 'user',
                     friends: Array.isArray(d.friends) ? d.friends : [],
                     incomingRequests: Array.isArray(d.incomingRequests) ? d.incomingRequests : [],
                     outgoingRequests: Array.isArray(d.outgoingRequests) ? d.outgoingRequests : [],
@@ -273,10 +264,6 @@
             if (selectedRole === '1') {
                 matchesRole = (u.level === 1);
             } else if (selectedRole === '0') {
-                matchesRole = (u.level === 0);
-            } else if (selectedRole === 'Administrator' || selectedRole === 'admin') {
-                matchesRole = (u.level === 1);
-            } else if (selectedRole === 'user') {
                 matchesRole = (u.level === 0);
             }
 
@@ -407,18 +394,15 @@
     function changeUserLevel(targetUid, newLevel, selectEl) {
         selectEl.prop('disabled', true);
         var numLevel = parseInt(newLevel, 10);
-        var roleString = numLevel === 1 ? 'admin' : 'user';
 
         db.collection('users').doc(targetUid).update({
-            level: numLevel,
-            role: roleString
+            level: numLevel
         }).then(function () {
             selectEl.prop('disabled', false);
             // Update in memory
             var userObj = allUsers.find(function (u) { return u.uid === targetUid; });
             if (userObj) {
                 userObj.level = numLevel;
-                userObj.role = roleString;
             }
             updateStats();
             renderUsersTable();

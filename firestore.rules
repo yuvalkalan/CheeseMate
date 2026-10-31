@@ -15,7 +15,6 @@ rules_version = '2';
 //   - usernameLower: string or null (optional, max 200 chars) - lowercase username for case-insensitive lookup
 //   - email: string or null (optional, max 254 chars) - user's email address for friend lookup
 //   - level: number (optional, 0 = user, 1 = admin) - user authorization level
-//   - role: string (optional, one of 'user', 'Administrator', 'admin') - legacy authorization role (backward compatibility)
 //   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
 //   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
 //   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
@@ -93,26 +92,19 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if the user is an Administrator based on the level (or legacy role) in their user document
+    // Check if the user is an Administrator based on the level in their user document
     function isAdmin() {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (
-          (('level' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level == 1) ||
-          (('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Administrator'])
-        );
+        'level' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level == 1;
     }
 
-    // Ensure permission level (and legacy role) are not modified by non-admin users on update
+    // Ensure permission level is not modified by non-admin users on update
     function isLevelUnchangedForNonAdmin() {
-      return isAdmin() || (
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
-         (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0))) &&
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
-         (!('role' in resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user')))
-      );
+      return isAdmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
+        (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0));
     }
 
     // Validate required fields exist
@@ -161,8 +153,6 @@ service cloud.firestore {
          (data.email is string && data.email.size() <= 254)) &&
         (!('level' in data) ||
          (data.level is number && (data.level == 0 || data.level == 1))) &&
-        (!('role' in data) ||
-         (data.role is string && (data.role in ['user', 'Administrator', 'admin']))) &&
         (!('friends' in data) ||
          (data.friends is list && data.friends.size() <= 500)) &&
         (!('incomingRequests' in data) ||
@@ -250,8 +240,7 @@ service cloud.firestore {
 
       allow create: if (isOwner(userId) || isAdmin()) &&
         isValidScheduleDoc(request.resource.data) &&
-        (!('level' in request.resource.data) || request.resource.data.level == 0 || isAdmin()) &&
-        (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
+        (!('level' in request.resource.data) || request.resource.data.level == 0 || isAdmin());
 
       allow update: if (
         isAdmin() ||

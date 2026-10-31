@@ -1005,15 +1005,7 @@
                 recomputeCourseStudentCounts();
             },
             onLevelChanged: function (level) {
-                var isAdmin = (level === 1 || level === 'Administrator' || level === 'admin');
-                if (isAdmin) {
-                    $('#top-navbar-admin').removeClass('d-none');
-                } else {
-                    $('#top-navbar-admin').addClass('d-none');
-                }
-            },
-            onRoleChanged: function (role) {
-                var isAdmin = (role === 1 || role === 'Administrator' || role === 'admin');
+                var isAdmin = (level === 1);
                 if (isAdmin) {
                     $('#top-navbar-admin').removeClass('d-none');
                 } else {
