@@ -1264,6 +1264,18 @@
             if (notificationsManager) {
                 notificationsManager.onUserSignedIn(user);
             }
+            if (personalArea && window.location.search && window.location.search.indexOf('tab=friends') !== -1) {
+                setTimeout(function () {
+                    personalArea.openDialog();
+                }, 300);
+                if (window.history && window.history.replaceState) {
+                    var cleanSearch = window.location.search.replace(/([?&])tab=friends(&|$)/, function (match, p1, p2) {
+                        return p2 === '&' ? p1 : '';
+                    });
+                    var cleanUrl = window.location.pathname + (cleanSearch && cleanSearch !== '?' ? cleanSearch : '');
+                    window.history.replaceState(null, '', cleanUrl || '/');
+                }
+            }
             recomputeCourseStudentCounts();
         }
 

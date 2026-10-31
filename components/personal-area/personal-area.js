@@ -712,7 +712,10 @@ var PersonalArea = (function () {
                 NotificationsManager.sendPush(targetUid, {
                     title: 'CheeseMate',
                     body: requestMsg,
-                    url: '/?tab=friends'
+                    icon: '/icons/android-chrome-192x192.png',
+                    badge: '/icons/favicon-32x32.png',
+                    url: '/?tab=friends',
+                    tag: notifRef.id
                 });
             }
         }).catch(function (err) {
@@ -760,7 +763,10 @@ var PersonalArea = (function () {
                 NotificationsManager.sendPush(requesterUid, {
                     title: 'CheeseMate',
                     body: acceptMsg,
-                    url: '/?tab=friends'
+                    icon: '/icons/android-chrome-192x192.png',
+                    badge: '/icons/favicon-32x32.png',
+                    url: '/?tab=friends',
+                    tag: notifRef.id
                 });
             }
         }).catch(function (err) {

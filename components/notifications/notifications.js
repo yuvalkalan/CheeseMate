@@ -407,12 +407,46 @@ var NotificationsManager = (function () {
     };
 
     NotificationsManager.prototype.showDesktopNotification = function (notifData) {
-        if (window.Notification && Notification.permission === 'granted') {
+        var that = this;
+        var title = 'CheeseMate';
+        var options = {
+            body: notifData.message || 'התקבלה הודעה חדשה ב-CheeseMate',
+            icon: '/icons/android-chrome-192x192.png',
+            badge: '/icons/favicon-32x32.png',
+            tag: notifData.id || ('cheesemate-' + Date.now()),
+            renotify: true,
+            vibrate: [200, 100, 200],
+            data: {
+                url: '/?tab=friends'
+            }
+        };
+
+        if (that.swRegistration && that.swRegistration.showNotification) {
+            that.swRegistration.showNotification(title, options).catch(function () {
+                if (window.Notification && Notification.permission === 'granted') {
+                    try {
+                        new Notification(title, options);
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+            });
+        } else if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(function (reg) {
+                that.swRegistration = reg;
+                return reg.showNotification(title, options);
+            }).catch(function () {
+                if (window.Notification && Notification.permission === 'granted') {
+                    try {
+                        new Notification(title, options);
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+            });
+        } else if (window.Notification && Notification.permission === 'granted') {
             try {
-                new Notification('CheeseMate', {
-                    body: notifData.message,
-                    icon: '/icons/favicon-32x32.png'
-                });
+                new Notification(title, options);
             } catch (e) {
                 // Ignore if browser restricts notifications
             }
@@ -439,7 +473,7 @@ var NotificationsManager = (function () {
                 targetUid: targetUid,
                 title: options.title || 'CheeseMate',
                 body: options.body || '',
-                icon: options.icon || '/icons/favicon-32x32.png',
+                icon: options.icon || '/icons/android-chrome-192x192.png',
                 badge: options.badge || '/icons/favicon-32x32.png',
                 url: options.url || '/',
                 tag: options.tag || ('cheesemate-' + Date.now()),
@@ -449,6 +483,43 @@ var NotificationsManager = (function () {
             return res.json();
         }).catch(function (err) {
             console.warn('Error sending push notification via Cloudflare Worker:', err);
+            return null;
+        });
+    };
+
+    /**
+     * Complete notification helper: stores document in Firestore AND dispatches Cloudflare Worker Web Push
+     * Ensures all system notifications reach the recipient when site is closed or phone is locked.
+     */
+    NotificationsManager.sendNotificationToUser = function (firestoreDb, targetUid, notifData, pushOptions) {
+        if (!firestoreDb || !targetUid || !notifData) {
+            return Promise.resolve(null);
+        }
+
+        var notifRef = firestoreDb.collection('users').doc(targetUid).collection('notifications').doc();
+        var docPayload = {
+            type: notifData.type || 'general',
+            fromUid: notifData.fromUid || '',
+            fromUsername: notifData.fromUsername || '',
+            message: notifData.message || '',
+            timestamp: notifData.timestamp || Date.now(),
+            read: false
+        };
+
+        return notifRef.set(docPayload).then(function () {
+            var mergedPushOptions = {
+                title: (pushOptions && pushOptions.title) || 'CheeseMate',
+                body: (pushOptions && pushOptions.body) || docPayload.message,
+                icon: (pushOptions && pushOptions.icon) || '/icons/android-chrome-192x192.png',
+                badge: (pushOptions && pushOptions.badge) || '/icons/favicon-32x32.png',
+                url: (pushOptions && pushOptions.url) || '/?tab=friends',
+                tag: notifRef.id,
+                delaySeconds: (pushOptions && pushOptions.delaySeconds) || 0
+            };
+
+            return NotificationsManager.sendPush(targetUid, mergedPushOptions);
+        }).catch(function (err) {
+            console.warn('Error sending notification to user:', err);
             return null;
         });
     };
