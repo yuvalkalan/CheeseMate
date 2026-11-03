@@ -16,7 +16,8 @@
     var stopScheduleWatching = null;
     var stopCourseStudentCountsWatching = null;
     var lastSemesterDocsSnapshot = null;
-    var currentSavedSession = null, ownSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
+    var currentSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
+    var ownSavedSession = null;
     var metadataDiff = {};
 
     // UI components.
@@ -207,6 +208,12 @@
 
         if (viewingSharedSchedule) {
             firebaseInit();
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user && personalArea) {
+                    personalArea.onUserSignedIn(user);
+                }
+                recomputeCourseStudentCounts();
+            });
             watchSharedSchedule(function () {
                 $('#page-loader').hide();
             });
@@ -1030,12 +1037,11 @@
             return;
         }
 
-        var myUid = (typeof firebase !== 'undefined' && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
-        var excludedUid = viewingFriendUid || scheduleSharingUserId || myUid;
+        var currentUserUid = (typeof firebase !== 'undefined' && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+        var excludedUid = viewingFriendUid || scheduleSharingUserId || currentUserUid;
         var semesterCoursesKey = currentSemester + '_courses';
         var studentCountsMap = {};
         var seenUserCourse = {};
-        var myOwnDocData = null;
 
         var friendsList = (personalArea && personalArea.userDocData && Array.isArray(personalArea.userDocData.friends)) ?
             personalArea.userDocData.friends : [];
@@ -1048,6 +1054,7 @@
 
         var courseFriendMap = {};
         var eventFriendsMap = {};
+        var myFirestoreScheduleData = null;
 
         if (lastSemesterDocsSnapshot) {
             lastSemesterDocsSnapshot.forEach(function (doc) {
@@ -1056,8 +1063,8 @@
                 }
                 var userDocRef = doc.ref.parent && doc.ref.parent.parent;
                 var uid = userDocRef ? userDocRef.id : null;
-                if (uid && myUid && uid === myUid) {
-                    myOwnDocData = doc.data() || {};
+                if (uid && currentUserUid && uid === currentUserUid) {
+                    myFirestoreScheduleData = doc.data() || {};
                 }
                 if (!uid || uid === excludedUid) {
                     return;
@@ -1126,6 +1133,31 @@
             });
         }
 
+        if (viewingFriendUid || viewingSharedSchedule) {
+            var myScheduleData = myFirestoreScheduleData || ownSavedSession || (!currentUserUid ? savedSessionFromLocalStorage() : null);
+            if (myScheduleData) {
+                var myCourses = myScheduleData[semesterCoursesKey];
+                if (Array.isArray(myCourses)) {
+                    myCourses.forEach(function (course) {
+                        var courseKey = currentSemester + '_' + course;
+                        var myCourseSelections = myScheduleData[courseKey];
+                        if (myCourseSelections && typeof myCourseSelections === 'object') {
+                            Object.keys(myCourseSelections).forEach(function (lessonType) {
+                                var myLessonNum = myCourseSelections[lessonType];
+                                if (myLessonNum !== undefined && myLessonNum !== null && myLessonNum !== '-') {
+                                    var eventKey = course + '.' + lessonType + '.' + myLessonNum;
+                                    if (!eventFriendsMap[eventKey]) {
+                                        eventFriendsMap[eventKey] = { count: 0, names: [], friends: [] };
+                                    }
+                                    eventFriendsMap[eventKey].sharedWithMe = true;
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
         var courseFriendCounts = {};
         Object.keys(courseFriendMap).forEach(function (course) {
             var friendObj = courseFriendMap[course];
@@ -1143,32 +1175,8 @@
             };
         });
 
-        var commonEventsMap = {};
-        if (viewingFriendUid) {
-            var mySessionData = myOwnDocData || ownSavedSession || {};
-            var myCourses = mySessionData[semesterCoursesKey];
-            if (Array.isArray(myCourses)) {
-                myCourses.forEach(function (course) {
-                    var courseKey = currentSemester + '_' + course;
-                    var mySelections = mySessionData[courseKey];
-                    if (mySelections && typeof mySelections === 'object') {
-                        Object.keys(mySelections).forEach(function (lessonType) {
-                            var myLessonNum = mySelections[lessonType];
-                            if (myLessonNum !== undefined && myLessonNum !== null && myLessonNum !== '-') {
-                                var eventKey = course + '.' + lessonType + '.' + myLessonNum;
-                                commonEventsMap[eventKey] = true;
-                            }
-                        });
-                    }
-                });
-            }
-        }
-
         courseButtonList.setCourseStudentCounts(studentCountsMap);
         courseButtonList.setCourseFriendCounts(courseFriendCounts);
-        if (courseCalendar) {
-            courseCalendar.commonEventsMap = commonEventsMap;
-        }
         if (courseCalendar && courseCalendar.setEventFriendCounts) {
             courseCalendar.setEventFriendCounts(eventFriendsMap);
         }
@@ -1597,7 +1605,7 @@
             stopScheduleWatching = null;
         }
 
-        if (!viewingFriendUid && currentSavedSession) {
+        if (!viewingFriendUid && !viewingSharedSchedule && currentSavedSession) {
             ownSavedSession = $.extend(true, {}, currentSavedSession);
         }
 

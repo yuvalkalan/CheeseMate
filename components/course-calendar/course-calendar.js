@@ -19,7 +19,6 @@ var CourseCalendar = (function () {
         this.onCustomEventUpdated = options.onCustomEventUpdated;
         this.onCustomEventRemoved = options.onCustomEventRemoved;
         this.eventFriendCounts = {};
-        this.commonEventsMap = {};
 
         var that = this;
 
@@ -988,64 +987,71 @@ var CourseCalendar = (function () {
         if (event.courseNumber !== null && that.eventFriendCounts) {
             var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
             var eventFriendData = that.eventFriendCounts[eventKey];
-            if (eventFriendData && eventFriendData.count > 0) {
-                var namesSuffix = '';
-                if (eventFriendData.names && eventFriendData.names.length > 0) {
-                    if (eventFriendData.names.length <= 3) {
-                        namesSuffix = ': ' + eventFriendData.names.join(', ');
-                    } else {
-                        namesSuffix = ': ' + eventFriendData.names.slice(0, 3).join(', ') + ' ועוד ' + (eventFriendData.names.length - 3);
+            var hasFriendsCount = Boolean(eventFriendData && eventFriendData.count > 0);
+            var isSharedWithMe = Boolean(eventFriendData && eventFriendData.sharedWithMe && event.selected);
+
+            if (hasFriendsCount || isSharedWithMe) {
+                var badgesContainer = $('<div class="calendar-item-badges-container"></div>');
+
+                if (hasFriendsCount) {
+                    var namesSuffix = '';
+                    if (eventFriendData.names && eventFriendData.names.length > 0) {
+                        if (eventFriendData.names.length <= 3) {
+                            namesSuffix = ': ' + eventFriendData.names.join(', ');
+                        } else {
+                            namesSuffix = ': ' + eventFriendData.names.slice(0, 3).join(', ') + ' ועוד ' + (eventFriendData.names.length - 3);
+                        }
                     }
-                }
-                var tooltipText;
-                if (event.selected) {
-                    tooltipText = (eventFriendData.count === 1) ?
-                        ('חבר אחד איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
-                        (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
-                } else {
-                    tooltipText = (eventFriendData.count === 1) ?
-                        ('חבר אחד באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
-                        (eventFriendData.count + ' חברים באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
+                    var tooltipText;
+                    if (event.selected) {
+                        tooltipText = (eventFriendData.count === 1) ?
+                            ('חבר אחד איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
+                            (eventFriendData.count + ' חברים איתך באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
+                    } else {
+                        tooltipText = (eventFriendData.count === 1) ?
+                            ('חבר אחד באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)') :
+                            (eventFriendData.count + ' חברים באירוע זה' + namesSuffix + ' (לחץ להצגת הרשימה)');
+                    }
+
+                    var badge = $('<span class="calendar-item-friend-badge">' +
+                        '<i class="fas fa-heart"></i> ' +
+                        '<span class="calendar-item-friend-badge-count">' + eventFriendData.count + '</span>' +
+                        '</span>');
+                    badge.prop('title', tooltipText)
+                        .attr('data-toggle', 'tooltip')
+                        .tooltip({
+                            placement: 'top',
+                            trigger: 'hover',
+                            container: 'body'
+                        })
+                        .click(function (e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            badge.tooltip('hide');
+                            showEventFriendsModal(that, event, eventFriendData);
+                        });
+                    badgesContainer.append(badge);
                 }
 
-                var badge = $('<span class="calendar-item-friend-badge">' +
-                    '<i class="fas fa-heart"></i> ' +
-                    '<span class="calendar-item-friend-badge-count">' + eventFriendData.count + '</span>' +
-                    '</span>');
-                badge.prop('title', tooltipText)
-                    .attr('data-toggle', 'tooltip')
-                    .tooltip({
-                        placement: 'top',
-                        trigger: 'hover',
-                        container: 'body'
-                    })
-                    .click(function (e) {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        badge.tooltip('hide');
-                        showEventFriendsModal(that, event, eventFriendData);
-                    });
-                element.append(badge);
-            }
-        }
+                if (isSharedWithMe) {
+                    var sharedBadge = $('<span class="calendar-item-shared-me-badge">' +
+                        '<i class="fas fa-user"></i>' +
+                        '</span>');
+                    sharedBadge.prop('title', 'אירוע משותף איתך')
+                        .attr('data-toggle', 'tooltip')
+                        .tooltip({
+                            placement: 'top',
+                            trigger: 'hover',
+                            container: 'body'
+                        })
+                        .click(function (e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        });
+                    badgesContainer.append(sharedBadge);
+                }
 
-        if (event.courseNumber !== null && event.selected && that.commonEventsMap) {
-            var commonEventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
-            if (that.commonEventsMap[commonEventKey]) {
-                var commonBadge = $('<span class="calendar-item-common-badge">' +
-                    '<i class="fas fa-user"></i>' +
-                    '</span>');
-                commonBadge.prop('title', 'אירוע משותף איתך')
-                    .attr('data-toggle', 'tooltip')
-                    .tooltip({
-                        placement: 'top',
-                        trigger: 'hover',
-                        container: 'body'
-                    })
-                    .click(function (e) {
-                        e.stopPropagation();
-                    });
-                element.append(commonBadge);
+                element.append(badgesContainer);
             }
         }
     }
@@ -1367,14 +1373,7 @@ var CourseCalendar = (function () {
     CourseCalendar.prototype.setEventFriendCounts = function (countsMap) {
         var that = this;
         that.eventFriendCounts = countsMap || {};
-        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
-        that.element.fullCalendar('rerenderEvents');
-    };
-
-    CourseCalendar.prototype.setCommonEvents = function (commonEventsMap) {
-        var that = this;
-        that.commonEventsMap = commonEventsMap || {};
-        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
+        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-shared-me-badge[data-toggle="tooltip"]').tooltip('hide');
         that.element.fullCalendar('rerenderEvents');
     };
 
@@ -1382,7 +1381,7 @@ var CourseCalendar = (function () {
         var that = this;
         var calendar = that.element;
 
-        calendar.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
+        calendar.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-shared-me-badge[data-toggle="tooltip"]').tooltip('hide');
         calendar.fullCalendar('removeEvents');
 
         updateCalendarMaxDayAndTime(calendar);
