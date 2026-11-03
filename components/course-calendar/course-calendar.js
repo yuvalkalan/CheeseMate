@@ -921,7 +921,9 @@ var CourseCalendar = (function () {
 
                 var infoDiv = $('<div></div>');
                 var nameDiv = $('<div class="event-friends-name font-weight-bold"></div>').text(friendName);
-                if (f.isAdmin) {
+                if (typeof RoleManager !== 'undefined') {
+                    RoleManager.applyRoleHover(nameDiv, f);
+                } else if (f.isAdmin) {
                     nameDiv.addClass('admin-golden-gradient');
                 }
                 infoDiv.append(nameDiv);

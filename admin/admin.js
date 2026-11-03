@@ -128,6 +128,10 @@
                     });
                     return batch.commit().then(function () {
                         console.log('Seeded permissionLevels collection with defaults (0: user, 1: admin).');
+                        if (typeof RoleManager !== 'undefined') {
+                            RoleManager.registerRole({ level: 0, name: 'user', description: 'משתמש רגיל', isStandard: true });
+                            RoleManager.registerRole({ level: 1, name: 'admin', description: 'מנהל מערכת', isStandard: false });
+                        }
                     }).catch(function (seedErr) {
                         console.warn('Could not seed permissionLevels:', seedErr);
                     });
@@ -141,6 +145,14 @@
                                 name: data.name || (lvl === 1 ? 'admin' : 'user'),
                                 description: data.description || ''
                             };
+                            if (typeof RoleManager !== 'undefined') {
+                                RoleManager.registerRole({
+                                    level: lvl,
+                                    name: data.name || (lvl === 1 ? 'admin' : 'user'),
+                                    description: data.description || '',
+                                    isStandard: (lvl === 0)
+                                });
+                            }
                         }
                     });
                 }
@@ -173,7 +185,12 @@
                     });
 
                     var displayName = data.username || data.displayName || user.displayName || user.email || 'מנהל';
-                    userNameHeader.text(displayName).addClass('admin-golden-gradient');
+                    userNameHeader.text(displayName);
+                    if (typeof RoleManager !== 'undefined') {
+                        RoleManager.applyRoleHover(userNameHeader, data);
+                    } else {
+                        userNameHeader.addClass('admin-golden-gradient');
+                    }
                     switchView('dashboard');
                     loadPermissionLevels().then(function () {
                         loadAllUsers();
@@ -436,9 +453,14 @@
             var avatar = $('<div class="user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarChar);
             var userMeta = $('<div></div>');
             var nameSpan = $('<span></span>').text(u.username);
-            if (isAdmin) {
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.applyRoleHover(nameSpan, u);
+            } else if (isAdmin) {
                 nameSpan.addClass('admin-golden-gradient');
             } else {
+                nameSpan.addClass('text-dark');
+            }
+            if (typeof RoleManager !== 'undefined' && RoleManager.isStandardUser(u)) {
                 nameSpan.addClass('text-dark');
             }
             var nameEl = $('<div class="font-weight-bold"></div>').append(nameSpan);
@@ -564,7 +586,9 @@
     function openDeleteModal(u) {
         userToDelete = u;
         deleteModalUsername.text(u.username);
-        if (u.level === 1) {
+        if (typeof RoleManager !== 'undefined') {
+            RoleManager.applyRoleHover(deleteModalUsername, u);
+        } else if (u.level === 1) {
             deleteModalUsername.addClass('admin-golden-gradient');
         } else {
             deleteModalUsername.removeClass('admin-golden-gradient');
@@ -677,7 +701,9 @@
 
             var userMeta = $('<div></div>');
             var nameSpan = $('<span></span>').text(u.username);
-            if (u.level === 1) {
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.applyRoleHover(nameSpan, u);
+            } else if (u.level === 1) {
                 nameSpan.addClass('admin-golden-gradient');
             }
             var nameDiv = $('<div class="small font-weight-bold"></div>').append(nameSpan);

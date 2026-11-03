@@ -1,0 +1,12 @@
+/* Role indication and hover styles */
+[data-role-level]:not([data-role-level="0"]) {
+    cursor: help;
+}
+
+/* Maintain pointer cursor when item is clickable (e.g. view schedule) */
+.personal-area-person-details [data-role-level]:not([data-role-level="0"]),
+.course-friends-item [data-role-level]:not([data-role-level="0"]),
+.event-friends-item [data-role-level]:not([data-role-level="0"]),
+.user-name-cell [data-role-level]:not([data-role-level="0"]) {
+    cursor: pointer;
+}

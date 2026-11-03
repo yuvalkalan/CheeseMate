@@ -65,6 +65,10 @@ var PersonalArea = (function () {
             return;
         }
 
+        if (typeof RoleManager !== 'undefined' && RoleManager.loadFromFirestore) {
+            RoleManager.loadFromFirestore(this.firestoreDb);
+        }
+
         var userRef = this.firestoreDb.collection('users').doc(user.uid);
 
         // Update lastSeen timestamp on sign-in / login
@@ -303,7 +307,9 @@ var PersonalArea = (function () {
         var textWrap = $('<div></div>');
         var usernameLine = $('<div class="personal-area-username-line"></div>');
         var usernameSpan = $('<span></span>').text(username);
-        if (this.isAdmin()) {
+        if (typeof RoleManager !== 'undefined') {
+            RoleManager.applyRoleHover(usernameSpan, this.userDocData || { level: this.getLevel() });
+        } else if (this.isAdmin()) {
             usernameSpan.addClass('admin-golden-gradient');
         }
         usernameLine.append(usernameSpan);
@@ -476,12 +482,17 @@ var PersonalArea = (function () {
     PersonalArea.prototype.getProfileInfo = function (uid) {
         var profile = this.profilesCache[uid] || {};
         var username = profile.username || profile.displayName || (profile.email ? profile.email.split('@')[0] : uid);
-        var isAdmin = Boolean(profile.level === 1 || profile.level === '1' || profile.role === 'admin' || profile.role === 'Administrator');
+        var level = (typeof profile.level === 'number') ? profile.level : 0;
+        if (typeof profile.level !== 'number' && (profile.role === 'admin' || profile.role === 'Administrator')) {
+            level = 1;
+        }
+        var isAdmin = (level === 1 || profile.role === 'admin' || profile.role === 'Administrator');
         return {
             uid: uid,
             username: username,
             email: profile.email || '',
-            level: (typeof profile.level === 'number') ? profile.level : (isAdmin ? 1 : 0),
+            level: level,
+            role: profile.role || (isAdmin ? 'admin' : 'user'),
             isAdmin: isAdmin
         };
     };
@@ -515,7 +526,9 @@ var PersonalArea = (function () {
             var item = $('<li class="list-group-item personal-area-list-item"></li>');
             var details = $('<div class="personal-area-person-details" style="cursor: pointer;" title="לחץ לצפייה במערכת של ' + friend.username + '"></div>');
             var nameSpan = $('<span class="personal-area-person-name"></span>').text(friend.username);
-            if (friend.isAdmin) {
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.applyRoleHover(nameSpan, friend);
+            } else if (friend.isAdmin) {
                 nameSpan.addClass('admin-golden-gradient');
             }
             details.append(nameSpan);
@@ -600,7 +613,9 @@ var PersonalArea = (function () {
             var item = $('<li class="list-group-item personal-area-list-item"></li>');
             var details = $('<div class="personal-area-person-details"></div>');
             var nameSpan = $('<span class="personal-area-person-name"></span>').text(requester.username);
-            if (requester.isAdmin) {
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.applyRoleHover(nameSpan, requester);
+            } else if (requester.isAdmin) {
                 nameSpan.addClass('admin-golden-gradient');
             }
             details.append(nameSpan);
@@ -676,7 +691,9 @@ var PersonalArea = (function () {
                     var details = $('<div class="personal-area-person-details"></div>');
                     var uName = userObj.username || userObj.displayName || (userObj.email ? userObj.email.split('@')[0] : userObj.uid);
                     var nameSpan = $('<span class="personal-area-person-name"></span>').text(uName);
-                    if (userObj.isAdmin) {
+                    if (typeof RoleManager !== 'undefined') {
+                        RoleManager.applyRoleHover(nameSpan, userObj);
+                    } else if (userObj.isAdmin) {
                         nameSpan.addClass('admin-golden-gradient');
                     }
                     details.append(nameSpan);

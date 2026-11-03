@@ -1087,7 +1087,10 @@
                         data.displayName ||
                         'חבר';
                     var profile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(uid) : null) || {};
-                    var isFriendAdmin = Boolean(profile.isAdmin || profile.level === 1 || data.level === 1 || data.role === 'admin' || data.role === 'Administrator');
+                    var friendLevel = (typeof profile.level === 'number') ? profile.level : (typeof data.level === 'number' ? data.level : (data.role === 'admin' ? 1 : 0));
+                    var isFriendAdmin = (typeof RoleManager !== 'undefined')
+                        ? !RoleManager.isStandardUser(friendLevel)
+                        : Boolean(profile.isAdmin || friendLevel === 1 || data.role === 'admin' || data.role === 'Administrator');
 
                     // 1. Record friend for all events/lessons they take in any course (for selected, unselected, and previewed options)
                     var friendCourses = data[semesterCoursesKey];
@@ -1109,7 +1112,8 @@
                                             uid: uid,
                                             username: friendName,
                                             email: profile.email || '',
-                                            level: profile.level,
+                                            level: friendLevel,
+                                            role: profile.role || data.role,
                                             isAdmin: isFriendAdmin
                                         });
                                     }
@@ -1129,7 +1133,8 @@
                                 uid: uid,
                                 username: friendName,
                                 email: profile.email || '',
-                                level: profile.level,
+                                level: friendLevel,
+                                role: profile.role || data.role,
                                 isAdmin: isFriendAdmin
                             };
                         });
@@ -1587,7 +1592,9 @@
                     firestoreDb.collection('users').doc(scheduleSharingUserId).get().then(function (uDoc) {
                         if (uDoc.exists) {
                             var uData = uDoc.data() || {};
-                            if (uData.level === 1 || uData.role === 'admin' || uData.role === 'Administrator') {
+                            if (typeof RoleManager !== 'undefined') {
+                                RoleManager.applyRoleHover(sharingNameEl, uData);
+                            } else if (uData.level === 1 || uData.role === 'admin' || uData.role === 'Administrator') {
                                 sharingNameEl.addClass('admin-golden-gradient');
                             } else {
                                 sharingNameEl.removeClass('admin-golden-gradient');
@@ -1599,7 +1606,11 @@
                 $('#sharing-user-unknown').addClass('d-none');
                 document.title = displayName + ' - CheeseMate - CheeseFork With Friends';
             } else {
-                $('#sharing-user-name').removeClass('admin-golden-gradient');
+                if (typeof RoleManager !== 'undefined') {
+                    RoleManager.applyRoleHover($('#sharing-user-name'), 0);
+                } else {
+                    $('#sharing-user-name').removeClass('admin-golden-gradient');
+                }
                 $('#sharing-user-unknown').removeClass('d-none');
                 $('#sharing-user-known').addClass('d-none');
                 document.title = 'CheeseMate - CheeseFork With Friends';
@@ -1644,8 +1655,9 @@
         var bannerName = $('#friend-schedule-banner-name');
         bannerName.text(viewingFriendName);
         var friendProfile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(friendUid) : null) || {};
-        var isFriendAdmin = Boolean(friendProfile.isAdmin || friendProfile.level === 1);
-        if (isFriendAdmin) {
+        if (typeof RoleManager !== 'undefined') {
+            RoleManager.applyRoleHover(bannerName, friendProfile);
+        } else if (friendProfile.isAdmin || friendProfile.level === 1) {
             bannerName.addClass('admin-golden-gradient');
         } else {
             bannerName.removeClass('admin-golden-gradient');
@@ -1698,7 +1710,11 @@
         viewingFriendName = null;
 
         // Hide friend schedule banner
-        $('#friend-schedule-banner-name').removeClass('admin-golden-gradient');
+        if (typeof RoleManager !== 'undefined') {
+            RoleManager.applyRoleHover($('#friend-schedule-banner-name'), 0);
+        } else {
+            $('#friend-schedule-banner-name').removeClass('admin-golden-gradient');
+        }
         $('#friend-schedule-banner').hide();
 
         if (!viewingSharedSchedule) {
