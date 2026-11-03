@@ -312,6 +312,8 @@ var NotificationsManager = (function () {
                     var senderSpan = $('<span></span>').text(notif.fromUsername);
                     if (typeof RoleManager !== 'undefined') {
                         RoleManager.applyRoleHover(senderSpan, senderProfile || { level: notif.fromLevel, role: notif.fromRole });
+                    } else if (senderProfile && senderProfile.level === 2) {
+                        senderSpan.addClass('role-atmosphere-gradient');
                     } else {
                         senderSpan.addClass('admin-golden-gradient');
                     }

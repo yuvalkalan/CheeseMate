@@ -340,4 +340,23 @@ img[src="assets/icon-students.png"] {
     color: #ffd700 !important;
 }
 
+.role-atmosphere-gradient,
+.personal-area-person-name.role-atmosphere-gradient,
+.personal-area-username-line.role-atmosphere-gradient,
+.course-friends-name.role-atmosphere-gradient,
+.event-friends-name.role-atmosphere-gradient {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 35%, #ff7979 70%, #ee5253 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #ff6b6b !important;
+}
+
+.badge-role-atmosphere {
+    background-color: #e63946 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 1px 4px rgba(230, 57, 70, 0.5) !important;
+}
+
 }

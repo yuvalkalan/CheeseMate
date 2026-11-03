@@ -923,8 +923,10 @@ var CourseCalendar = (function () {
                 var nameDiv = $('<div class="event-friends-name font-weight-bold"></div>').text(friendName);
                 if (typeof RoleManager !== 'undefined') {
                     RoleManager.applyRoleHover(nameDiv, f);
-                } else if (f.isAdmin) {
+                } else if (f.isAdmin || f.level === 1) {
                     nameDiv.addClass('admin-golden-gradient');
+                } else if (f.level === 2) {
+                    nameDiv.addClass('role-atmosphere-gradient');
                 }
                 infoDiv.append(nameDiv);
                 if (f.email) {

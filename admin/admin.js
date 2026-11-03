@@ -26,7 +26,8 @@
     // Mapping of permission levels: numeric level -> { level, name, description }
     var permissionLevelsMap = {
         0: { level: 0, name: 'user', description: 'משתמש רגיל' },
-        1: { level: 1, name: 'admin', description: 'מנהל מערכת' }
+        1: { level: 1, name: 'admin', description: 'מנהל מערכת' },
+        2: { level: 2, name: 'atmosphere', description: 'א. אווירה' }
     };
 
     // DOM Elements
@@ -126,31 +127,56 @@
                         name: 'admin',
                         description: 'מנהל מערכת'
                     });
+                    batch.set(db.collection('permissionLevels').doc('2'), {
+                        level: 2,
+                        name: 'atmosphere',
+                        description: 'א. אווירה'
+                    });
                     return batch.commit().then(function () {
-                        console.log('Seeded permissionLevels collection with defaults (0: user, 1: admin).');
+                        console.log('Seeded permissionLevels collection with defaults (0: user, 1: admin, 2: atmosphere).');
                         if (typeof RoleManager !== 'undefined') {
                             RoleManager.registerRole({ level: 0, name: 'user', description: 'משתמש רגיל', isStandard: true });
                             RoleManager.registerRole({ level: 1, name: 'admin', description: 'מנהל מערכת', isStandard: false });
+                            RoleManager.registerRole({ level: 2, name: 'atmosphere', description: 'א. אווירה', isStandard: false });
                         }
                     }).catch(function (seedErr) {
                         console.warn('Could not seed permissionLevels:', seedErr);
                     });
                 } else {
+                    // Check if level 2 exists, if not auto-seed it
+                    var hasAtmosphere = false;
+                    snapshot.forEach(function (doc) {
+                        if (doc.id === '2') {
+                            hasAtmosphere = true;
+                        }
+                    });
+                    if (!hasAtmosphere) {
+                        db.collection('permissionLevels').doc('2').set({
+                            level: 2,
+                            name: 'atmosphere',
+                            description: 'א. אווירה'
+                        }).catch(function (seedErr) {
+                            console.warn('Could not seed permissionLevel 2:', seedErr);
+                        });
+                    }
+
                     snapshot.forEach(function (doc) {
                         var data = doc.data() || {};
                         var lvl = typeof data.level === 'number' ? data.level : parseInt(doc.id, 10);
                         if (!isNaN(lvl)) {
                             permissionLevelsMap[lvl] = {
                                 level: lvl,
-                                name: data.name || (lvl === 1 ? 'admin' : 'user'),
-                                description: data.description || ''
+                                name: data.name || (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'user')),
+                                description: data.description || (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'משתמש רגיל'))
                             };
                             if (typeof RoleManager !== 'undefined') {
                                 RoleManager.registerRole({
                                     level: lvl,
-                                    name: data.name || (lvl === 1 ? 'admin' : 'user'),
-                                    description: data.description || '',
-                                    isStandard: (lvl === 0)
+                                    name: data.name || (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'user')),
+                                    description: data.description || (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'משתמש רגיל')),
+                                    isStandard: (lvl === 0),
+                                    badgeClass: (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-user')),
+                                    gradientClass: (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null))
                                 });
                             }
                         }
@@ -411,6 +437,8 @@
                 matchesRole = (u.level === 1);
             } else if (selectedRole === '0') {
                 matchesRole = (u.level === 0);
+            } else if (selectedRole === '2') {
+                matchesRole = (u.level === 2);
             }
 
             if (!matchesRole) return false;
@@ -498,10 +526,13 @@
             // 4. Role / Level column with dropdown selector
             var roleTd = $('<td></td>');
             var roleSelect = $('<select class="custom-select custom-select-sm" style="width: auto; min-width: 140px;"></select>');
-            var userLevelName = (permissionLevelsMap[0] ? permissionLevelsMap[0].name : 'user');
-            var adminLevelName = (permissionLevelsMap[1] ? permissionLevelsMap[1].name : 'admin');
-            roleSelect.append('<option value="0"' + (!isAdmin ? ' selected' : '') + '>0 - ' + userLevelName + '</option>');
-            roleSelect.append('<option value="1"' + (isAdmin ? ' selected' : '') + '>1 - ' + adminLevelName + '</option>');
+            var sortedLevels = Object.keys(permissionLevelsMap).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+            sortedLevels.forEach(function (lvlNum) {
+                var pInfo = permissionLevelsMap[lvlNum] || { name: 'level_' + lvlNum, description: '' };
+                var isSelected = (u.level === lvlNum);
+                var label = lvlNum + ' - ' + pInfo.name + (pInfo.description ? ' (' + pInfo.description + ')' : '');
+                roleSelect.append($('<option></option>').val(lvlNum).text(label).prop('selected', isSelected));
+            });
 
             if (isCurrent) {
                 roleSelect.prop('disabled', true).attr('title', 'לא ניתן לשנות את הרשאת החשבון המחובר');
@@ -512,8 +543,17 @@
                 });
             }
 
-            var roleBadge = $('<span class="badge mr-2 ' + (isAdmin ? 'badge-role-admin' : 'badge-role-user') + '"></span>')
-                .text(levelInfo.name + ' (' + u.level + ')');
+            var badgeClass = 'badge-role-user';
+            if (u.level === 1) {
+                badgeClass = 'badge-role-admin';
+            } else if (u.level === 2) {
+                badgeClass = 'badge-role-atmosphere';
+            } else if (typeof RoleManager !== 'undefined') {
+                badgeClass = RoleManager.getRole(u).badgeClass || 'badge-role-user';
+            }
+
+            var roleBadgeText = (levelInfo.description ? levelInfo.description : levelInfo.name) + ' (' + u.level + ')';
+            var roleBadge = $('<span class="badge mr-2 ' + badgeClass + '"></span>').text(roleBadgeText);
 
             var roleWrapper = $('<div class="d-flex align-items-center"></div>');
             roleWrapper.append(roleBadge, roleSelect);
@@ -590,8 +630,10 @@
             RoleManager.applyRoleHover(deleteModalUsername, u);
         } else if (u.level === 1) {
             deleteModalUsername.addClass('admin-golden-gradient');
+        } else if (u.level === 2) {
+            deleteModalUsername.addClass('role-atmosphere-gradient');
         } else {
-            deleteModalUsername.removeClass('admin-golden-gradient');
+            deleteModalUsername.removeClass('admin-golden-gradient role-atmosphere-gradient');
         }
         deleteModalEmail.text(u.email || 'לא צוין');
         deleteModalUid.text(u.uid);
@@ -705,6 +747,8 @@
                 RoleManager.applyRoleHover(nameSpan, u);
             } else if (u.level === 1) {
                 nameSpan.addClass('admin-golden-gradient');
+            } else if (u.level === 2) {
+                nameSpan.addClass('role-atmosphere-gradient');
             }
             var nameDiv = $('<div class="small font-weight-bold"></div>').append(nameSpan);
             if (currentUser && currentUser.uid === u.uid) {

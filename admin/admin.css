@@ -101,6 +101,14 @@ body {
     font-weight: 600;
 }
 
+.badge-role-atmosphere {
+    background-color: #dc3545;
+    color: #ffffff;
+    font-size: 0.8rem;
+    padding: .35em .65em;
+    font-weight: 600;
+}
+
 /* Golden gradient for administrator names */
 .admin-golden-gradient {
     background: linear-gradient(135deg, #a67c1e 0%, #eac159 25%, #966b12 50%, #f3ce72 75%, #8a5f00 100%);
@@ -108,6 +116,17 @@ body {
     -webkit-text-fill-color: transparent !important;
     background-clip: text !important;
     color: #a67c1e !important;
+    display: inline-block;
+    font-weight: 700;
+}
+
+/* Red gradient for "א. אווירה" names */
+.role-atmosphere-gradient {
+    background: linear-gradient(135deg, #c02424 0%, #e83e8c 25%, #dc3545 50%, #f85032 75%, #b31217 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #dc3545 !important;
     display: inline-block;
     font-weight: 700;
 }
@@ -359,5 +378,18 @@ body {
         -webkit-text-fill-color: transparent !important;
         background-clip: text !important;
         color: #ffd700 !important;
+    }
+
+    .role-atmosphere-gradient {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 35%, #ff7979 70%, #ee5253 100%) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+        color: #ff6b6b !important;
+    }
+
+    .badge-role-atmosphere {
+        background-color: #e63946 !important;
+        color: #ffffff !important;
     }
 }

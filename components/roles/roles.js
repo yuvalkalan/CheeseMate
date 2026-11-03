@@ -22,7 +22,9 @@ var RoleManager = (function () {
             description: 'משתמש רגיל',
             isStandard: true,
             badgeClass: 'badge-role-user',
-            gradientClass: null
+            gradientClass: null,
+            hasNameTag: false,
+            nameTagText: ''
         },
         1: {
             level: 1,
@@ -30,7 +32,19 @@ var RoleManager = (function () {
             description: 'מנהל מערכת',
             isStandard: false,
             badgeClass: 'badge-role-admin',
-            gradientClass: 'admin-golden-gradient'
+            gradientClass: 'admin-golden-gradient',
+            hasNameTag: false,
+            nameTagText: ''
+        },
+        2: {
+            level: 2,
+            name: 'atmosphere',
+            description: 'א. אווירה',
+            isStandard: false,
+            badgeClass: 'badge-role-atmosphere',
+            gradientClass: 'role-atmosphere-gradient',
+            hasNameTag: false,
+            nameTagText: ''
         }
     };
 
@@ -40,7 +54,11 @@ var RoleManager = (function () {
         'regular': 0,
         'standard': 0,
         'admin': 1,
-        'administrator': 1
+        'administrator': 1,
+        'atmosphere': 2,
+        'vibe': 2,
+        'א. אווירה': 2,
+        'אחראי אווירה': 2
     };
 
     /**
@@ -59,18 +77,25 @@ var RoleManager = (function () {
         }
         var lvl = role.level;
         var isStandard = (typeof role.isStandard === 'boolean') ? role.isStandard : (lvl === 0);
+        var hasNameTag = Boolean(role.hasNameTag);
+        var nameTagText = role.nameTagText || '';
 
         rolesMap[lvl] = {
             level: lvl,
-            name: role.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : 'role_' + lvl)),
-            description: role.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : 'דרגה ' + lvl)),
+            name: role.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'role_' + lvl))),
+            description: role.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'דרגה ' + lvl))),
             isStandard: isStandard,
-            badgeClass: role.badgeClass || (isStandard ? 'badge-role-user' : 'badge-role-admin'),
-            gradientClass: role.gradientClass !== undefined ? role.gradientClass : (lvl === 1 ? 'admin-golden-gradient' : null)
+            badgeClass: role.badgeClass || (isStandard ? 'badge-role-user' : (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-custom'))),
+            gradientClass: role.gradientClass !== undefined ? role.gradientClass : (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null)),
+            hasNameTag: hasNameTag,
+            nameTagText: nameTagText
         };
 
         if (role.name) {
             roleNamesMap[String(role.name).toLowerCase().trim()] = lvl;
+        }
+        if (role.description) {
+            roleNamesMap[String(role.description).toLowerCase().trim()] = lvl;
         }
     }
 
@@ -122,6 +147,15 @@ var RoleManager = (function () {
             }
         }
         return 0;
+    }
+
+    /**
+     * Determines whether the given user or level is an administrator (level === 1).
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function isAdmin(userOrLevel) {
+        return resolveLevel(userOrLevel) === 1;
     }
 
     /**
@@ -207,10 +241,16 @@ var RoleManager = (function () {
         var placement = options.placement || 'top';
         var initTooltip = (options.initTooltip !== false);
         var applyGradient = (options.applyGradient !== false);
+        var showNameTag = (options.showNameTag !== false);
 
         var lvl = resolveLevel(userOrLevel);
         var role = getRole(lvl);
         var desc = getRoleDescription(userOrLevel);
+
+        // Clear existing role name tags attached to this element
+        $el.find('.role-name-tag').remove();
+        // Clear previous gradient classes
+        $el.removeClass('admin-golden-gradient role-atmosphere-gradient');
 
         if (desc) {
             // Non-standard user: set role description on hover
@@ -247,9 +287,6 @@ var RoleManager = (function () {
                     } catch (e) {}
                 }
             }
-            if (applyGradient && role.gradientClass) {
-                $el.removeClass(role.gradientClass);
-            }
         }
 
         return $el;
@@ -274,11 +311,13 @@ var RoleManager = (function () {
                         if (!isNaN(lvl)) {
                             registerRole({
                                 level: lvl,
-                                name: data.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : 'role_' + lvl)),
-                                description: data.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : 'דרגה ' + lvl)),
-                                isStandard: (lvl === 0),
-                                badgeClass: data.badgeClass || (lvl === 1 ? 'badge-role-admin' : 'badge-role-user'),
-                                gradientClass: data.gradientClass || (lvl === 1 ? 'admin-golden-gradient' : null)
+                                name: data.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'role_' + lvl))),
+                                description: data.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'דרגה ' + lvl))),
+                                isStandard: (typeof data.isStandard === 'boolean') ? data.isStandard : (lvl === 0),
+                                badgeClass: data.badgeClass || (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-user')),
+                                gradientClass: data.gradientClass || (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null)),
+                                hasNameTag: Boolean(data.hasNameTag),
+                                nameTagText: data.nameTagText || ''
                             });
                         }
                     });
@@ -303,6 +342,7 @@ var RoleManager = (function () {
         registerRole: registerRole,
         resolveLevel: resolveLevel,
         isStandardUser: isStandardUser,
+        isAdmin: isAdmin,
         getRole: getRole,
         getRoleDescription: getRoleDescription,
         hasRoleDescription: hasRoleDescription,

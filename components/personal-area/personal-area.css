@@ -121,3 +121,14 @@
     display: inline-block;
     font-weight: 700;
 }
+
+/* Red gradient for "א. אווירה" names */
+.role-atmosphere-gradient {
+    background: linear-gradient(135deg, #c02424 0%, #e83e8c 25%, #dc3545 50%, #f85032 75%, #b31217 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #dc3545 !important;
+    display: inline-block;
+    font-weight: 700;
+}

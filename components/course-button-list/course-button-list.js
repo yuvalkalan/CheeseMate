@@ -860,8 +860,10 @@ var CourseButtonList = (function () {
                 var nameDiv = $('<div class="course-friends-name font-weight-bold"></div>').text(friendName);
                 if (typeof RoleManager !== 'undefined') {
                     RoleManager.applyRoleHover(nameDiv, f);
-                } else if (f.isAdmin) {
+                } else if (f.isAdmin || f.level === 1) {
                     nameDiv.addClass('admin-golden-gradient');
+                } else if (f.level === 2) {
+                    nameDiv.addClass('role-atmosphere-gradient');
                 }
                 nameBox.append(nameDiv);
                 if (f.email) {

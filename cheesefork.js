@@ -1089,7 +1089,7 @@
                     var profile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(uid) : null) || {};
                     var friendLevel = (typeof profile.level === 'number') ? profile.level : (typeof data.level === 'number' ? data.level : (data.role === 'admin' ? 1 : 0));
                     var isFriendAdmin = (typeof RoleManager !== 'undefined')
-                        ? !RoleManager.isStandardUser(friendLevel)
+                        ? RoleManager.isAdmin(friendLevel)
                         : Boolean(profile.isAdmin || friendLevel === 1 || data.role === 'admin' || data.role === 'Administrator');
 
                     // 1. Record friend for all events/lessons they take in any course (for selected, unselected, and previewed options)
@@ -1596,8 +1596,10 @@
                                 RoleManager.applyRoleHover(sharingNameEl, uData);
                             } else if (uData.level === 1 || uData.role === 'admin' || uData.role === 'Administrator') {
                                 sharingNameEl.addClass('admin-golden-gradient');
+                            } else if (uData.level === 2) {
+                                sharingNameEl.addClass('role-atmosphere-gradient');
                             } else {
-                                sharingNameEl.removeClass('admin-golden-gradient');
+                                sharingNameEl.removeClass('admin-golden-gradient role-atmosphere-gradient');
                             }
                         }
                     }).catch(function () {});
@@ -1659,8 +1661,10 @@
             RoleManager.applyRoleHover(bannerName, friendProfile);
         } else if (friendProfile.isAdmin || friendProfile.level === 1) {
             bannerName.addClass('admin-golden-gradient');
+        } else if (friendProfile.level === 2) {
+            bannerName.addClass('role-atmosphere-gradient');
         } else {
-            bannerName.removeClass('admin-golden-gradient');
+            bannerName.removeClass('admin-golden-gradient role-atmosphere-gradient');
         }
         $('#friend-schedule-banner').css('display', 'flex');
 

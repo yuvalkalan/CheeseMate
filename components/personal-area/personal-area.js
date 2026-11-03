@@ -492,7 +492,7 @@ var PersonalArea = (function () {
             username: username,
             email: profile.email || '',
             level: level,
-            role: profile.role || (isAdmin ? 'admin' : 'user'),
+            role: profile.role || (isAdmin ? 'admin' : (level === 2 ? 'atmosphere' : 'user')),
             isAdmin: isAdmin
         };
     };
