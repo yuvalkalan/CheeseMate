@@ -1087,6 +1087,7 @@
                         data.displayName ||
                         'חבר';
                     var profile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(uid) : null) || {};
+                    var isFriendAdmin = Boolean(profile.isAdmin || profile.level === 1 || data.level === 1 || data.role === 'admin' || data.role === 'Administrator');
 
                     // 1. Record friend for all events/lessons they take in any course (for selected, unselected, and previewed options)
                     var friendCourses = data[semesterCoursesKey];
@@ -1107,7 +1108,9 @@
                                         eventFriendsMap[eventKey].friends.push({
                                             uid: uid,
                                             username: friendName,
-                                            email: profile.email || ''
+                                            email: profile.email || '',
+                                            level: profile.level,
+                                            isAdmin: isFriendAdmin
                                         });
                                     }
                                 });
@@ -1125,7 +1128,9 @@
                             courseFriendMap[course][uid] = {
                                 uid: uid,
                                 username: friendName,
-                                email: profile.email || ''
+                                email: profile.email || '',
+                                level: profile.level,
+                                isAdmin: isFriendAdmin
                             };
                         });
                     }
@@ -1576,11 +1581,25 @@
 
             if (result.exists && result.data().displayName) {
                 var displayName = firestoreDisplayNameDecode(result.data().displayName);
-                $('#sharing-user-name').text(displayName);
+                var sharingNameEl = $('#sharing-user-name');
+                sharingNameEl.text(displayName);
+                if (firestoreDb && scheduleSharingUserId) {
+                    firestoreDb.collection('users').doc(scheduleSharingUserId).get().then(function (uDoc) {
+                        if (uDoc.exists) {
+                            var uData = uDoc.data() || {};
+                            if (uData.level === 1 || uData.role === 'admin' || uData.role === 'Administrator') {
+                                sharingNameEl.addClass('admin-golden-gradient');
+                            } else {
+                                sharingNameEl.removeClass('admin-golden-gradient');
+                            }
+                        }
+                    }).catch(function () {});
+                }
                 $('#sharing-user-known').removeClass('d-none');
                 $('#sharing-user-unknown').addClass('d-none');
                 document.title = displayName + ' - CheeseMate - CheeseFork With Friends';
             } else {
+                $('#sharing-user-name').removeClass('admin-golden-gradient');
                 $('#sharing-user-unknown').removeClass('d-none');
                 $('#sharing-user-known').addClass('d-none');
                 document.title = 'CheeseMate - CheeseFork With Friends';
@@ -1622,7 +1641,15 @@
         $('#top-navbar-home').removeClass('d-none');
 
         // Show friend schedule banner
-        $('#friend-schedule-banner-name').text(viewingFriendName);
+        var bannerName = $('#friend-schedule-banner-name');
+        bannerName.text(viewingFriendName);
+        var friendProfile = (personalArea && personalArea.getProfileInfo ? personalArea.getProfileInfo(friendUid) : null) || {};
+        var isFriendAdmin = Boolean(friendProfile.isAdmin || friendProfile.level === 1);
+        if (isFriendAdmin) {
+            bannerName.addClass('admin-golden-gradient');
+        } else {
+            bannerName.removeClass('admin-golden-gradient');
+        }
         $('#friend-schedule-banner').css('display', 'flex');
 
         document.title = viewingFriendName + ' - מערכת שעות - CheeseMate';
@@ -1671,6 +1698,7 @@
         viewingFriendName = null;
 
         // Hide friend schedule banner
+        $('#friend-schedule-banner-name').removeClass('admin-golden-gradient');
         $('#friend-schedule-banner').hide();
 
         if (!viewingSharedSchedule) {

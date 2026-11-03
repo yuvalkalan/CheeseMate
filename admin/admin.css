@@ -101,6 +101,17 @@ body {
     font-weight: 600;
 }
 
+/* Golden gradient for administrator names */
+.admin-golden-gradient {
+    background: linear-gradient(135deg, #a67c1e 0%, #eac159 25%, #966b12 50%, #f3ce72 75%, #8a5f00 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #a67c1e !important;
+    display: inline-block;
+    font-weight: 700;
+}
+
 .badge-role-user {
     background-color: #36b9cc;
     color: #ffffff;
@@ -143,6 +154,19 @@ body {
 
 .table td {
     vertical-align: middle;
+}
+
+.last-seen-time {
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: #212529;
+    white-space: nowrap;
+}
+
+.last-seen-date {
+    font-size: 0.75rem;
+    color: #6e707e;
+    white-space: nowrap;
 }
 
 .table-responsive {
@@ -319,5 +343,21 @@ body {
 
     #notify-preview-msg {
         color: #cccccc !important;
+    }
+
+    .last-seen-time {
+        color: #e0e0e0;
+    }
+
+    .last-seen-date {
+        color: #9e9e9e;
+    }
+
+    .admin-golden-gradient {
+        background: linear-gradient(135deg, #ffd700 0%, #ffe680 25%, #e6a817 50%, #fff2a8 75%, #cca010 100%) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+        color: #ffd700 !important;
     }
 }

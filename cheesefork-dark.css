@@ -328,5 +328,16 @@ img[src="assets/icon-students.png"] {
     color: rgb(222, 226, 230) !important;
 }
 
+.admin-golden-gradient,
+.personal-area-person-name.admin-golden-gradient,
+.personal-area-username-line.admin-golden-gradient,
+.course-friends-name.admin-golden-gradient,
+.event-friends-name.admin-golden-gradient {
+    background: linear-gradient(135deg, #ffd700 0%, #ffe680 25%, #e6a817 50%, #fff2a8 75%, #cca010 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #ffd700 !important;
+}
 
 }

@@ -857,7 +857,11 @@ var CourseButtonList = (function () {
                 leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
 
                 var nameBox = $('<div></div>');
-                nameBox.append($('<div class="course-friends-name font-weight-bold"></div>').text(friendName));
+                var nameDiv = $('<div class="course-friends-name font-weight-bold"></div>').text(friendName);
+                if (f.isAdmin) {
+                    nameDiv.addClass('admin-golden-gradient');
+                }
+                nameBox.append(nameDiv);
                 if (f.email) {
                     nameBox.append($('<div class="course-friends-email small"></div>').text(f.email));
                 }

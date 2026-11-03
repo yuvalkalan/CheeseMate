@@ -110,3 +110,14 @@
     padding: 1.75rem 1rem;
     color: #6c757d;
 }
+
+/* Golden gradient for administrator names */
+.admin-golden-gradient {
+    background: linear-gradient(135deg, #a67c1e 0%, #eac159 25%, #966b12 50%, #f3ce72 75%, #8a5f00 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #a67c1e !important;
+    display: inline-block;
+    font-weight: 700;
+}

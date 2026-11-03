@@ -165,8 +165,15 @@
                 var data = doc.exists ? doc.data() : {};
 
                 if (isAdministrator(user, data)) {
+                    // Update admin's lastSeen timestamp in Firestore
+                    db.collection('users').doc(user.uid).set({
+                        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true }).catch(function (err) {
+                        console.warn('Failed to update admin lastSeen timestamp:', err);
+                    });
+
                     var displayName = data.username || data.displayName || user.displayName || user.email || 'מנהל';
-                    userNameHeader.text(displayName);
+                    userNameHeader.text(displayName).addClass('admin-golden-gradient');
                     switchView('dashboard');
                     loadPermissionLevels().then(function () {
                         loadAllUsers();
@@ -232,6 +239,7 @@
                     friends: Array.isArray(d.friends) ? d.friends : [],
                     incomingRequests: Array.isArray(d.incomingRequests) ? d.incomingRequests : [],
                     outgoingRequests: Array.isArray(d.outgoingRequests) ? d.outgoingRequests : [],
+                    lastSeen: extractUserLastSeen(d),
                     data: d
                 });
             });
@@ -279,6 +287,101 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function padZero(num) {
+        return num < 10 ? '0' + num : String(num);
+    }
+
+    function parseDate(val) {
+        if (!val) return null;
+        if (typeof val.toDate === 'function') {
+            try {
+                var res = val.toDate();
+                return (res instanceof Date && !isNaN(res.getTime())) ? res : null;
+            } catch (e) {
+                return null;
+            }
+        }
+        if (val instanceof Date) {
+            return isNaN(val.getTime()) ? null : val;
+        }
+        if (typeof val === 'number') {
+            var ms = val < 1e11 ? val * 1000 : val;
+            var dNum = new Date(ms);
+            return isNaN(dNum.getTime()) ? null : dNum;
+        }
+        if (typeof val === 'string') {
+            var parsed = Date.parse(val);
+            if (!isNaN(parsed)) {
+                return new Date(parsed);
+            }
+        }
+        if (typeof val === 'object' && typeof val.seconds === 'number') {
+            var dSec = new Date(val.seconds * 1000 + (val.nanoseconds ? val.nanoseconds / 1e6 : 0));
+            return isNaN(dSec.getTime()) ? null : dSec;
+        }
+        return null;
+    }
+
+    function extractUserLastSeen(d) {
+        var raw = d && (d.lastSeen || d.last_seen || d.lastActive || d.lastLogin || d.lastSeenAt || d.updatedAt);
+        return parseDate(raw);
+    }
+
+    function formatLastSeen(date) {
+        if (!date) {
+            return {
+                html: '<span class="text-muted small" title="לא נרשמה פעילות">-</span>',
+                title: 'לא נרשמה פעילות'
+            };
+        }
+
+        var now = Date.now();
+        var timeMs = date.getTime();
+        var diffMs = now - timeMs;
+        var day = padZero(date.getDate());
+        var month = padZero(date.getMonth() + 1);
+        var year = date.getFullYear();
+        var fullDateStr = day + '/' + month + '/' + year;
+        var hours = padZero(date.getHours());
+        var minutes = padZero(date.getMinutes());
+        var timeStr = hours + ':' + minutes;
+        var fullFormatted = fullDateStr + ' ' + timeStr;
+
+        if (diffMs < 2 * 60 * 1000) {
+            return {
+                html: '<span class="badge badge-success font-weight-normal py-1 px-2"><i class="fas fa-circle ml-1 small" style="font-size: 0.5rem; vertical-align: middle;"></i> מחובר עכשיו</span><small class="last-seen-date d-block mt-1">' + fullFormatted + '</small>',
+                title: fullFormatted
+            };
+        }
+
+        var diffSec = Math.floor(diffMs / 1000);
+        var diffMin = Math.floor(diffSec / 60);
+        var diffHour = Math.floor(diffMin / 60);
+        var diffDays = Math.floor(diffHour / 24);
+
+        var relativeText = '';
+        var subText = fullFormatted;
+        if (diffMin < 60) {
+            relativeText = 'לפני ' + (diffMin === 1 ? 'דקה' : (diffMin === 2 ? '2 דקות' : diffMin + ' דקות'));
+        } else if (diffHour < 24) {
+            relativeText = 'לפני ' + (diffHour === 1 ? 'שעה' : (diffHour === 2 ? 'שעתיים' : diffHour + ' שעות'));
+        } else if (diffDays === 1) {
+            relativeText = 'אתמול ב-' + timeStr;
+        } else if (diffDays === 2) {
+            relativeText = 'לפני יומיים ב-' + timeStr;
+        } else if (diffDays < 7) {
+            relativeText = 'לפני ' + diffDays + ' ימים';
+        } else {
+            relativeText = fullDateStr;
+            subText = timeStr;
+        }
+
+        return {
+            html: '<div class="last-seen-time">' + relativeText + '</div><small class="last-seen-date d-block">' + subText + '</small>',
+            title: fullFormatted
+        };
     }
 
     function renderUsersTable() {
@@ -332,7 +435,13 @@
             var userFlex = $('<div class="d-flex align-items-center"></div>');
             var avatar = $('<div class="user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarChar);
             var userMeta = $('<div></div>');
-            var nameEl = $('<div class="font-weight-bold text-dark"></div>').text(u.username);
+            var nameSpan = $('<span></span>').text(u.username);
+            if (isAdmin) {
+                nameSpan.addClass('admin-golden-gradient');
+            } else {
+                nameSpan.addClass('text-dark');
+            }
+            var nameEl = $('<div class="font-weight-bold"></div>').append(nameSpan);
             if (isCurrent) {
                 nameEl.append(' <span class="badge badge-light border text-muted small">(אתה)</span>');
             }
@@ -393,7 +502,13 @@
             var fCount = u.friends.length;
             friendsTd.html('<span class="badge badge-light border"><i class="fas fa-user-friends ml-1 text-primary"></i> ' + fCount + '</span>');
 
-            // 6. Actions column (Send Notification & Delete buttons)
+            // 6. Last Seen column
+            var lastSeenTd = $('<td></td>');
+            var lastSeenFormatted = formatLastSeen(u.lastSeen);
+            lastSeenTd.attr('title', lastSeenFormatted.title);
+            lastSeenTd.html(lastSeenFormatted.html);
+
+            // 7. Actions column (Send Notification & Delete buttons)
             var actionsTd = $('<td class="text-center"></td>');
             var sendNotifyBtn = $('<button class="btn btn-outline-primary btn-sm ml-1" title="שלח הודעה למשתמש זה"></button>')
                 .html('<i class="fas fa-paper-plane ml-1"></i> הודעה')
@@ -414,7 +529,7 @@
 
             actionsTd.append(sendNotifyBtn, deleteBtn);
 
-            tr.append(userTd, emailTd, uidTd, roleTd, friendsTd, actionsTd);
+            tr.append(userTd, emailTd, uidTd, roleTd, friendsTd, lastSeenTd, actionsTd);
             usersTableBody.append(tr);
         });
     }
@@ -449,6 +564,11 @@
     function openDeleteModal(u) {
         userToDelete = u;
         deleteModalUsername.text(u.username);
+        if (u.level === 1) {
+            deleteModalUsername.addClass('admin-golden-gradient');
+        } else {
+            deleteModalUsername.removeClass('admin-golden-gradient');
+        }
         deleteModalEmail.text(u.email || 'לא צוין');
         deleteModalUid.text(u.uid);
         confirmDeleteBtn.prop('disabled', false).html('<i class="fas fa-trash-alt ml-1"></i> מחק משתמש');
@@ -556,7 +676,11 @@
             var avatar = $('<div class="notify-user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarLetter);
 
             var userMeta = $('<div></div>');
-            var nameDiv = $('<div class="small font-weight-bold"></div>').text(u.username);
+            var nameSpan = $('<span></span>').text(u.username);
+            if (u.level === 1) {
+                nameSpan.addClass('admin-golden-gradient');
+            }
+            var nameDiv = $('<div class="small font-weight-bold"></div>').append(nameSpan);
             if (currentUser && currentUser.uid === u.uid) {
                 nameDiv.append(' <span class="badge badge-light border text-muted small">(אתה)</span>');
             }

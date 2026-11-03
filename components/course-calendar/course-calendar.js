@@ -920,7 +920,11 @@ var CourseCalendar = (function () {
                 leftSide.append($('<span class="ml-3 text-danger"><i class="fas fa-heart fa-lg"></i></span>'));
 
                 var infoDiv = $('<div></div>');
-                infoDiv.append($('<div class="event-friends-name font-weight-bold"></div>').text(friendName));
+                var nameDiv = $('<div class="event-friends-name font-weight-bold"></div>').text(friendName);
+                if (f.isAdmin) {
+                    nameDiv.addClass('admin-golden-gradient');
+                }
+                infoDiv.append(nameDiv);
                 if (f.email) {
                     infoDiv.append($('<div class="event-friends-email small"></div>').text(f.email));
                 }

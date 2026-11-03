@@ -66,6 +66,14 @@ var PersonalArea = (function () {
         }
 
         var userRef = this.firestoreDb.collection('users').doc(user.uid);
+
+        // Update lastSeen timestamp on sign-in / login
+        userRef.set({
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(function (err) {
+            console.warn('Failed to update lastSeen timestamp:', err);
+        });
+
         this.unsubscribeUserDoc = userRef.onSnapshot(function (snapshot) {
             if (snapshot.metadata && snapshot.metadata.fromCache && !snapshot.exists) {
                 return;
@@ -118,6 +126,9 @@ var PersonalArea = (function () {
                 }
                 if (!Array.isArray(data.outgoingRequests)) {
                     initUpdate.outgoingRequests = firebase.firestore.FieldValue.arrayUnion();
+                }
+                if (!data.lastSeen) {
+                    initUpdate.lastSeen = firebase.firestore.FieldValue.serverTimestamp();
                 }
                 userRef.set(initUpdate, { merge: true });
                 data = $.extend({}, data, {
@@ -290,7 +301,12 @@ var PersonalArea = (function () {
         var userInfo = $('<div class="personal-area-user-info"></div>');
         var avatar = $('<div class="personal-area-avatar"><i class="fas fa-user"></i></div>');
         var textWrap = $('<div></div>');
-        var usernameLine = $('<div class="personal-area-username-line"></div>').text(username);
+        var usernameLine = $('<div class="personal-area-username-line"></div>');
+        var usernameSpan = $('<span></span>').text(username);
+        if (this.isAdmin()) {
+            usernameSpan.addClass('admin-golden-gradient');
+        }
+        usernameLine.append(usernameSpan);
         var emailLine = $('<div class="personal-area-email-line text-muted"></div>').text(email);
         textWrap.append(usernameLine);
         if (email) {
@@ -460,10 +476,13 @@ var PersonalArea = (function () {
     PersonalArea.prototype.getProfileInfo = function (uid) {
         var profile = this.profilesCache[uid] || {};
         var username = profile.username || profile.displayName || (profile.email ? profile.email.split('@')[0] : uid);
+        var isAdmin = Boolean(profile.level === 1 || profile.level === '1' || profile.role === 'admin' || profile.role === 'Administrator');
         return {
             uid: uid,
             username: username,
-            email: profile.email || ''
+            email: profile.email || '',
+            level: (typeof profile.level === 'number') ? profile.level : (isAdmin ? 1 : 0),
+            isAdmin: isAdmin
         };
     };
 
@@ -495,7 +514,11 @@ var PersonalArea = (function () {
         friendProfiles.forEach(function (friend) {
             var item = $('<li class="list-group-item personal-area-list-item"></li>');
             var details = $('<div class="personal-area-person-details" style="cursor: pointer;" title="לחץ לצפייה במערכת של ' + friend.username + '"></div>');
-            details.append($('<span class="personal-area-person-name"></span>').text(friend.username));
+            var nameSpan = $('<span class="personal-area-person-name"></span>').text(friend.username);
+            if (friend.isAdmin) {
+                nameSpan.addClass('admin-golden-gradient');
+            }
+            details.append(nameSpan);
             if (friend.email) {
                 details.append($('<span class="personal-area-person-email text-muted"></span>').text(friend.email));
             }
@@ -576,7 +599,11 @@ var PersonalArea = (function () {
         requesterProfiles.forEach(function (requester) {
             var item = $('<li class="list-group-item personal-area-list-item"></li>');
             var details = $('<div class="personal-area-person-details"></div>');
-            details.append($('<span class="personal-area-person-name"></span>').text(requester.username));
+            var nameSpan = $('<span class="personal-area-person-name"></span>').text(requester.username);
+            if (requester.isAdmin) {
+                nameSpan.addClass('admin-golden-gradient');
+            }
+            details.append(nameSpan);
             if (requester.email) {
                 details.append($('<span class="personal-area-person-email text-muted"></span>').text(requester.email));
             }
@@ -648,7 +675,11 @@ var PersonalArea = (function () {
                     var item = $('<li class="list-group-item personal-area-list-item"></li>');
                     var details = $('<div class="personal-area-person-details"></div>');
                     var uName = userObj.username || userObj.displayName || (userObj.email ? userObj.email.split('@')[0] : userObj.uid);
-                    details.append($('<span class="personal-area-person-name"></span>').text(uName));
+                    var nameSpan = $('<span class="personal-area-person-name"></span>').text(uName);
+                    if (userObj.isAdmin) {
+                        nameSpan.addClass('admin-golden-gradient');
+                    }
+                    details.append(nameSpan);
                     if (userObj.email) {
                         details.append($('<span class="personal-area-person-email text-muted"></span>').text(userObj.email));
                     }
@@ -716,12 +747,15 @@ var PersonalArea = (function () {
                     var uName = (d.username || d.displayName || '').toLowerCase();
                     var uEmail = (d.email || '').toLowerCase();
                     if ((uName && uName.indexOf(qLower) !== -1) || (uEmail && uEmail.indexOf(qLower) !== -1)) {
+                        var isAdmin = Boolean(d.level === 1 || d.level === '1' || d.role === 'admin' || d.role === 'Administrator');
                         var profile = {
                             uid: doc.id,
                             username: d.username || d.displayName || (d.email ? d.email.split('@')[0] : doc.id),
-                            email: d.email || ''
+                            email: d.email || '',
+                            level: (typeof d.level === 'number') ? d.level : (isAdmin ? 1 : 0),
+                            isAdmin: isAdmin
                         };
-                        that.profilesCache[doc.id] = profile;
+                        that.profilesCache[doc.id] = d;
                         matches.push(profile);
                     }
                 });

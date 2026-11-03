@@ -298,7 +298,24 @@ var NotificationsManager = (function () {
                 msg.append($('<span class="badge ' + badgeClass + ' ml-1 font-weight-normal"></span>').text(badgeText));
                 msg.append($('<span></span>').text(' ' + (notif.message || '')));
             } else {
-                msg.text(notif.message || '');
+                var isSenderAdmin = false;
+                if (notif.fromUid && typeof personalArea !== 'undefined' && personalArea.getProfileInfo) {
+                    var senderProfile = personalArea.getProfileInfo(notif.fromUid);
+                    if (senderProfile && senderProfile.isAdmin) {
+                        isSenderAdmin = true;
+                    }
+                }
+                if (isSenderAdmin && notif.fromUsername && notif.message && notif.message.indexOf(notif.fromUsername) !== -1) {
+                    var splitIdx = notif.message.indexOf(notif.fromUsername);
+                    var beforeName = notif.message.substring(0, splitIdx);
+                    var afterName = notif.message.substring(splitIdx + notif.fromUsername.length);
+                    var senderSpan = $('<span class="admin-golden-gradient"></span>').text(notif.fromUsername);
+                    if (beforeName) msg.append($('<span></span>').text(beforeName));
+                    msg.append(senderSpan);
+                    if (afterName) msg.append($('<span></span>').text(afterName));
+                } else {
+                    msg.text(notif.message || '');
+                }
             }
 
             var time = $('<div class="notification-time"></div>').text(formatTimeAgo(notif.timestamp));

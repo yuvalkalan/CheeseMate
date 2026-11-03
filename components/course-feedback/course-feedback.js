@@ -13,6 +13,28 @@ var CourseFeedback = (function () {
 
     var authReady = false;
     var authReadyCallbacks = null;
+    var feedbackFirestore = null;
+
+    function getFeedbackFirestore() {
+        if (!feedbackFirestore) {
+            var cheeseforkConfig = {
+                apiKey: 'AIzaSyAfKPyTM83mkLgdQTdx9YS9UXywiswwIYI',
+                authDomain: 'cheesefork-de9af.firebaseapp.com',
+                databaseURL: 'https://cheesefork-de9af.firebaseio.com',
+                projectId: 'cheesefork-de9af',
+                storageBucket: 'cheesefork-de9af.appspot.com',
+                messagingSenderId: '916559682433'
+            };
+            var app;
+            try {
+                app = firebase.app('cheesefork');
+            } catch (e) {
+                app = firebase.initializeApp(cheeseforkConfig, 'cheesefork');
+            }
+            feedbackFirestore = app.firestore();
+        }
+        return feedbackFirestore;
+    }
 
     // currentUser is null both when signed out and before the initial auth state is
     // restored, and the compat SDK doesn't expose authStateReady, so tell the two apart
@@ -180,7 +202,7 @@ var CourseFeedback = (function () {
                         posts: firebase.firestore.FieldValue.arrayUnion(data)
                     };
 
-                    firebase.firestore().collection('courseFeedback').doc(course)
+                    getFeedbackFirestore().collection('courseFeedback').doc(course)
                         .set(update, {merge: true})
                         .then(function () {
                             options.onSubmit();
@@ -347,7 +369,7 @@ var CourseFeedback = (function () {
                     posts: firebase.firestore.FieldValue.arrayUnion(data)
                 };
 
-                firebase.firestore().collection('courseFeedbackReports').doc(course)
+                getFeedbackFirestore().collection('courseFeedbackReports').doc(course)
                     .set(update, {merge: true})
                     .then(function () {
                         options.onSubmit();
@@ -674,7 +696,7 @@ var CourseFeedback = (function () {
         };
 
         if (typeof firebase !== 'undefined') {
-            firebase.firestore().collection('courseFeedback').doc(course).get()
+            getFeedbackFirestore().collection('courseFeedback').doc(course).get()
                 .then(function (doc) {
                     var posts = [];
                     if (doc.exists) {
