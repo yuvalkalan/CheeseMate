@@ -19,6 +19,7 @@ var CourseCalendar = (function () {
         this.onCustomEventUpdated = options.onCustomEventUpdated;
         this.onCustomEventRemoved = options.onCustomEventRemoved;
         this.eventFriendCounts = {};
+        this.commonEventsMap = {};
 
         var that = this;
 
@@ -1027,6 +1028,26 @@ var CourseCalendar = (function () {
                 element.append(badge);
             }
         }
+
+        if (event.courseNumber !== null && event.selected && that.commonEventsMap) {
+            var commonEventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
+            if (that.commonEventsMap[commonEventKey]) {
+                var commonBadge = $('<span class="calendar-item-common-badge">' +
+                    '<i class="fas fa-user"></i>' +
+                    '</span>');
+                commonBadge.prop('title', 'אירוע משותף איתך')
+                    .attr('data-toggle', 'tooltip')
+                    .tooltip({
+                        placement: 'top',
+                        trigger: 'hover',
+                        container: 'body'
+                    })
+                    .click(function (e) {
+                        e.stopPropagation();
+                    });
+                element.append(commonBadge);
+            }
+        }
     }
 
     function onWindowResize() {
@@ -1346,7 +1367,14 @@ var CourseCalendar = (function () {
     CourseCalendar.prototype.setEventFriendCounts = function (countsMap) {
         var that = this;
         that.eventFriendCounts = countsMap || {};
-        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
+        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
+        that.element.fullCalendar('rerenderEvents');
+    };
+
+    CourseCalendar.prototype.setCommonEvents = function (commonEventsMap) {
+        var that = this;
+        that.commonEventsMap = commonEventsMap || {};
+        that.element.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
         that.element.fullCalendar('rerenderEvents');
     };
 
@@ -1354,7 +1382,7 @@ var CourseCalendar = (function () {
         var that = this;
         var calendar = that.element;
 
-        calendar.find('.calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
+        calendar.find('.calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-common-badge[data-toggle="tooltip"]').tooltip('hide');
         calendar.fullCalendar('removeEvents');
 
         updateCalendarMaxDayAndTime(calendar);

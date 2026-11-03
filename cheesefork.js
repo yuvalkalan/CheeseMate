@@ -16,7 +16,7 @@
     var stopScheduleWatching = null;
     var stopCourseStudentCountsWatching = null;
     var lastSemesterDocsSnapshot = null;
-    var currentSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
+    var currentSavedSession = null, ownSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
     var metadataDiff = {};
 
     // UI components.
@@ -1030,11 +1030,12 @@
             return;
         }
 
-        var excludedUid = viewingFriendUid || scheduleSharingUserId ||
-            (typeof firebase !== 'undefined' && firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
+        var myUid = (typeof firebase !== 'undefined' && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+        var excludedUid = viewingFriendUid || scheduleSharingUserId || myUid;
         var semesterCoursesKey = currentSemester + '_courses';
         var studentCountsMap = {};
         var seenUserCourse = {};
+        var myOwnDocData = null;
 
         var friendsList = (personalArea && personalArea.userDocData && Array.isArray(personalArea.userDocData.friends)) ?
             personalArea.userDocData.friends : [];
@@ -1055,6 +1056,9 @@
                 }
                 var userDocRef = doc.ref.parent && doc.ref.parent.parent;
                 var uid = userDocRef ? userDocRef.id : null;
+                if (uid && myUid && uid === myUid) {
+                    myOwnDocData = doc.data() || {};
+                }
                 if (!uid || uid === excludedUid) {
                     return;
                 }
@@ -1139,8 +1143,32 @@
             };
         });
 
+        var commonEventsMap = {};
+        if (viewingFriendUid) {
+            var mySessionData = myOwnDocData || ownSavedSession || {};
+            var myCourses = mySessionData[semesterCoursesKey];
+            if (Array.isArray(myCourses)) {
+                myCourses.forEach(function (course) {
+                    var courseKey = currentSemester + '_' + course;
+                    var mySelections = mySessionData[courseKey];
+                    if (mySelections && typeof mySelections === 'object') {
+                        Object.keys(mySelections).forEach(function (lessonType) {
+                            var myLessonNum = mySelections[lessonType];
+                            if (myLessonNum !== undefined && myLessonNum !== null && myLessonNum !== '-') {
+                                var eventKey = course + '.' + lessonType + '.' + myLessonNum;
+                                commonEventsMap[eventKey] = true;
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
         courseButtonList.setCourseStudentCounts(studentCountsMap);
         courseButtonList.setCourseFriendCounts(courseFriendCounts);
+        if (courseCalendar) {
+            courseCalendar.commonEventsMap = commonEventsMap;
+        }
         if (courseCalendar && courseCalendar.setEventFriendCounts) {
             courseCalendar.setEventFriendCounts(eventFriendsMap);
         }
@@ -1567,6 +1595,10 @@
         if (stopScheduleWatching) {
             stopScheduleWatching();
             stopScheduleWatching = null;
+        }
+
+        if (!viewingFriendUid && currentSavedSession) {
+            ownSavedSession = $.extend(true, {}, currentSavedSession);
         }
 
         viewingFriendUid = friendUid;
