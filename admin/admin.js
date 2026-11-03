@@ -54,6 +54,37 @@
     var deleteModalUid = $('#delete-modal-uid');
     var confirmDeleteBtn = $('#confirm-delete-user-btn');
 
+    // Notification Modal Elements
+    var notifyModal = $('#sendNotificationModal');
+    var notifyForm = $('#admin-send-notification-form');
+    var openNotifyModalBtn = $('#admin-open-notify-modal-btn');
+    var notifyRadioBroadcast = $('#notify-target-broadcast');
+    var notifyRadioSpecific = $('#notify-target-specific');
+    var notifyBroadcastInfo = $('#notify-broadcast-info');
+    var notifyBroadcastCount = $('#notify-broadcast-count');
+    var notifySpecificContainer = $('#notify-specific-users-container');
+    var notifyUsersChecklist = $('#notify-users-checklist');
+    var notifyUserSearch = $('#notify-user-search');
+    var notifySelectAllBtn = $('#notify-select-all-btn');
+    var notifyDeselectAllBtn = $('#notify-deselect-all-btn');
+    var notifySelectedCountBadge = $('#notify-selected-users-badge');
+    var notifySenderName = $('#notify-sender-name');
+    var notifyTypeSelect = $('#notify-type-select');
+    var notifyMessageText = $('#notify-message-text');
+    var notifyCharCounter = $('#notify-char-counter');
+    var notifySendPush = $('#notify-send-push');
+    var notifyPreviewIcon = $('#notify-preview-icon');
+    var notifyPreviewBadge = $('#notify-preview-badge');
+    var notifyPreviewSender = $('#notify-preview-sender');
+    var notifyPreviewMsg = $('#notify-preview-msg');
+    var notifyProgressBox = $('#notify-progress-box');
+    var notifyProgressBar = $('#notify-progress-bar');
+    var notifyProgressLabel = $('#notify-progress-label');
+    var notifyProgressPercent = $('#notify-progress-percent');
+    var notifyResultAlert = $('#notify-result-alert');
+    var notifySubmitBtn = $('#notify-submit-btn');
+    var notifyCancelBtn = $('#notify-cancel-btn');
+
     function switchView(view) {
         loadingState.addClass('d-none');
         loginState.addClass('d-none');
@@ -362,8 +393,14 @@
             var fCount = u.friends.length;
             friendsTd.html('<span class="badge badge-light border"><i class="fas fa-user-friends ml-1 text-primary"></i> ' + fCount + '</span>');
 
-            // 6. Actions column (Delete button)
+            // 6. Actions column (Send Notification & Delete buttons)
             var actionsTd = $('<td class="text-center"></td>');
+            var sendNotifyBtn = $('<button class="btn btn-outline-primary btn-sm ml-1" title="שלח הודעה למשתמש זה"></button>')
+                .html('<i class="fas fa-paper-plane ml-1"></i> הודעה')
+                .click(function () {
+                    openSendNotificationModal(u.uid);
+                });
+
             var deleteBtn = $('<button class="btn btn-outline-danger btn-sm" title="מחק משתמש לצמיתות"></button>')
                 .html('<i class="fas fa-trash-alt ml-1"></i> מחק');
 
@@ -375,7 +412,7 @@
                 });
             }
 
-            actionsTd.append(deleteBtn);
+            actionsTd.append(sendNotifyBtn, deleteBtn);
 
             tr.append(userTd, emailTd, uidTd, roleTd, friendsTd, actionsTd);
             usersTableBody.append(tr);
@@ -480,6 +517,308 @@
         }).catch(function (err) {
             confirmDeleteBtn.prop('disabled', false).html('<i class="fas fa-trash-alt ml-1"></i> מחק משתמש');
             alert('שגיאה במחיקת המשתמש: ' + err.message);
+        });
+    });
+
+    // ==========================================
+    // System Notification Modal & Sending Logic
+    // ==========================================
+
+    function updateSelectedUsersCount() {
+        var count = notifyUsersChecklist.find('.notify-user-chk:checked').length;
+        notifySelectedCountBadge.text('נבחרו ' + count + ' משתמשים');
+        if (count > 0) {
+            notifySelectedCountBadge.removeClass('badge-secondary').addClass('badge-primary');
+        } else {
+            notifySelectedCountBadge.removeClass('badge-primary').addClass('badge-secondary');
+        }
+    }
+
+    function populateUsersChecklist(preselectedUid) {
+        notifyUsersChecklist.empty();
+        notifyUserSearch.val('');
+
+        allUsers.forEach(function (u) {
+            var row = $('<div class="notify-user-row d-flex align-items-center justify-content-between"></div>');
+            row.attr('data-username', (u.username || '').toLowerCase());
+            row.attr('data-email', (u.email || '').toLowerCase());
+            row.attr('data-uid', (u.uid || '').toLowerCase());
+
+            var leftFlex = $('<div class="d-flex align-items-center"></div>');
+            var chk = $('<input type="checkbox" class="notify-user-chk ml-2">').val(u.uid);
+            if (preselectedUid && u.uid === preselectedUid) {
+                chk.prop('checked', true);
+                row.addClass('selected');
+            }
+
+            var avatarBg = (u.level === 1) ? '#e74a3b' : '#4e73df';
+            var avatarLetter = u.username ? u.username.charAt(0).toUpperCase() : '?';
+            var avatar = $('<div class="notify-user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarLetter);
+
+            var userMeta = $('<div></div>');
+            var nameDiv = $('<div class="small font-weight-bold"></div>').text(u.username);
+            if (currentUser && currentUser.uid === u.uid) {
+                nameDiv.append(' <span class="badge badge-light border text-muted small">(אתה)</span>');
+            }
+            var emailDiv = $('<div class="small text-muted"></div>').text(u.email || 'ללא דוא״ל');
+            userMeta.append(nameDiv, emailDiv);
+
+            leftFlex.append(chk, avatar, userMeta);
+
+            var rightBadges = $('<div class="d-flex align-items-center"></div>');
+            var roleBadge = $('<span class="badge mr-1 ' + (u.level === 1 ? 'badge-role-admin' : 'badge-role-user') + '" style="font-size: 0.7rem;"></span>')
+                .text(u.level === 1 ? 'admin' : 'user');
+            rightBadges.append(roleBadge);
+
+            row.append(leftFlex, rightBadges);
+
+            chk.change(function () {
+                if ($(this).is(':checked')) {
+                    row.addClass('selected');
+                } else {
+                    row.removeClass('selected');
+                }
+                updateSelectedUsersCount();
+            });
+
+            row.click(function (e) {
+                if (e.target.tagName.toLowerCase() !== 'input') {
+                    chk.prop('checked', !chk.is(':checked')).trigger('change');
+                }
+            });
+
+            notifyUsersChecklist.append(row);
+        });
+
+        updateSelectedUsersCount();
+    }
+
+    notifyUserSearch.on('input', function () {
+        var q = ($(this).val() || '').trim().toLowerCase();
+        notifyUsersChecklist.find('.notify-user-row').each(function () {
+            var r = $(this);
+            var uName = r.attr('data-username') || '';
+            var uEmail = r.attr('data-email') || '';
+            var uUid = r.attr('data-uid') || '';
+            if (!q || uName.indexOf(q) !== -1 || uEmail.indexOf(q) !== -1 || uUid.indexOf(q) !== -1) {
+                r.removeClass('d-none');
+            } else {
+                r.addClass('d-none');
+            }
+        });
+    });
+
+    notifySelectAllBtn.click(function () {
+        notifyUsersChecklist.find('.notify-user-row:not(.d-none) .notify-user-chk').prop('checked', true).trigger('change');
+    });
+
+    notifyDeselectAllBtn.click(function () {
+        notifyUsersChecklist.find('.notify-user-chk').prop('checked', false).trigger('change');
+    });
+
+    $('input[name="notifyTargetMode"]').change(function () {
+        var mode = $(this).val();
+        if (mode === 'broadcast') {
+            notifyBroadcastInfo.removeClass('d-none');
+            notifySpecificContainer.addClass('d-none');
+        } else {
+            notifyBroadcastInfo.addClass('d-none');
+            notifySpecificContainer.removeClass('d-none');
+            updateSelectedUsersCount();
+        }
+    });
+
+    function updateNotificationPreview() {
+        var text = notifyMessageText.val() || '';
+        var sender = notifySenderName.val() || 'מערכת CheeseMate';
+        var type = notifyTypeSelect.val();
+
+        notifyCharCounter.text(text.length);
+        if (text.length > 500) {
+            notifyCharCounter.addClass('text-danger font-weight-bold');
+        } else {
+            notifyCharCounter.removeClass('text-danger font-weight-bold');
+        }
+
+        notifyPreviewSender.text(sender);
+        notifyPreviewMsg.text(text || '(תוכן ההודעה יוצג כאן...)');
+
+        if (type === 'update') {
+            notifyPreviewIcon.html('<i class="fas fa-star text-info fa-lg"></i>');
+            notifyPreviewBadge.text('עדכון').removeClass('badge-warning text-dark badge-danger').addClass('badge-info text-white');
+        } else if (type === 'alert') {
+            notifyPreviewIcon.html('<i class="fas fa-exclamation-circle text-danger fa-lg"></i>');
+            notifyPreviewBadge.text('התראה').removeClass('badge-warning text-dark badge-info').addClass('badge-danger text-white');
+        } else {
+            notifyPreviewIcon.html('<i class="fas fa-bullhorn text-warning fa-lg"></i>');
+            notifyPreviewBadge.text('מערכת').removeClass('badge-info text-white badge-danger').addClass('badge-warning text-dark');
+        }
+    }
+
+    notifyMessageText.on('input', updateNotificationPreview);
+    notifySenderName.on('input', updateNotificationPreview);
+    notifyTypeSelect.change(updateNotificationPreview);
+
+    function openSendNotificationModal(preselectedUid) {
+        notifyBroadcastCount.text(allUsers.length);
+        notifyMessageText.val('');
+        notifySenderName.val('מערכת CheeseMate');
+        notifyTypeSelect.val('system');
+        notifySendPush.prop('checked', true);
+        notifyProgressBox.addClass('d-none');
+        notifyProgressBar.css('width', '0%');
+        notifyProgressPercent.text('0%');
+        notifyResultAlert.addClass('d-none').removeClass('alert-success alert-danger').text('');
+        notifySubmitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane ml-1"></i> שלח הודעה');
+        notifyCancelBtn.prop('disabled', false);
+
+        populateUsersChecklist(preselectedUid);
+
+        if (preselectedUid) {
+            notifyRadioSpecific.prop('checked', true).trigger('change');
+        } else {
+            // Default to broadcast as requested
+            notifyRadioBroadcast.prop('checked', true).trigger('change');
+        }
+
+        updateNotificationPreview();
+        notifyModal.modal('show');
+    }
+
+    openNotifyModalBtn.click(function () {
+        openSendNotificationModal(null);
+    });
+
+    notifyForm.submit(function (e) {
+        e.preventDefault();
+
+        var msg = (notifyMessageText.val() || '').trim();
+        if (!msg) {
+            alert('אנא הזינו תוכן להודעה.');
+            notifyMessageText.focus();
+            return;
+        }
+        if (msg.length > 500) {
+            alert('תוכן ההודעה ארוך מדי (מקסימום 500 תווים).');
+            notifyMessageText.focus();
+            return;
+        }
+
+        var sender = (notifySenderName.val() || '').trim() || 'מערכת CheeseMate';
+        var type = notifyTypeSelect.val() || 'system';
+        var shouldSendPush = notifySendPush.is(':checked');
+        var targetMode = $('input[name="notifyTargetMode"]:checked').val();
+
+        var targetUids = [];
+        if (targetMode === 'broadcast') {
+            targetUids = allUsers.map(function (u) { return u.uid; });
+        } else {
+            notifyUsersChecklist.find('.notify-user-chk:checked').each(function () {
+                targetUids.push($(this).val());
+            });
+        }
+
+        if (targetUids.length === 0) {
+            alert('יש לבחור לפחות נמען אחד להודעה.');
+            return;
+        }
+
+        // UI state: sending
+        notifySubmitBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm ml-1" role="status" aria-hidden="true"></span> שולח...');
+        notifyCancelBtn.prop('disabled', true);
+        notifyProgressBox.removeClass('d-none');
+        notifyResultAlert.addClass('d-none');
+        notifyProgressBar.css('width', '15%');
+        notifyProgressPercent.text('15%');
+        notifyProgressLabel.text('שומר התראות במסד הנתונים...');
+
+        // 1. Commit notifications to Firestore in chunks of 400
+        var now = Date.now();
+        var chunks = [];
+        for (var i = 0; i < targetUids.length; i += 400) {
+            chunks.push(targetUids.slice(i, i + 400));
+        }
+
+        var firestorePromises = chunks.map(function (chunk) {
+            var batch = db.batch();
+            chunk.forEach(function (tUid) {
+                var notifRef = db.collection('users').doc(tUid).collection('notifications').doc();
+                batch.set(notifRef, {
+                    type: type,
+                    fromUid: currentUser ? currentUser.uid : 'admin',
+                    fromUsername: sender,
+                    message: msg,
+                    timestamp: now,
+                    read: false
+                });
+            });
+            return batch.commit();
+        });
+
+        Promise.all(firestorePromises).then(function () {
+            notifyProgressBar.css('width', shouldSendPush ? '50%' : '100%');
+            notifyProgressPercent.text(shouldSendPush ? '50%' : '100%');
+
+            if (!shouldSendPush) {
+                return { pushSent: 0 };
+            }
+
+            notifyProgressLabel.text('שולח התראות Push למכשירים רשומים...');
+
+            var pushWorkerUrl = (typeof NotificationsManager !== 'undefined' && NotificationsManager.WORKER_URL) ?
+                NotificationsManager.WORKER_URL : 'https://cheesemate-push.yuvalkalan.workers.dev';
+
+            var pushPromises = targetUids.map(function (tUid, idx) {
+                return fetch(pushWorkerUrl + '/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetUid: tUid,
+                        title: sender,
+                        body: msg,
+                        icon: '/icons/android-chrome-192x192.png',
+                        badge: '/icons/favicon-32x32.png',
+                        url: '/'
+                    })
+                }).then(function (res) {
+                    return res.json();
+                }).catch(function (err) {
+                    console.warn('Push error for ' + tUid, err);
+                    return null;
+                }).finally(function () {
+                    var completed = idx + 1;
+                    var pct = 50 + Math.floor((completed / targetUids.length) * 50);
+                    notifyProgressBar.css('width', pct + '%');
+                    notifyProgressPercent.text(pct + '%');
+                });
+            });
+
+            return Promise.all(pushPromises);
+        }).then(function () {
+            notifyProgressBar.css('width', '100%');
+            notifyProgressPercent.text('100%');
+            notifyProgressLabel.text('השליחה הושלמה בהצלחה!');
+
+            var modeText = (targetMode === 'broadcast') ? 'בשידור לכל ' + targetUids.length + ' המשתמשים' : 'ל-' + targetUids.length + ' משתמשים נבחרים';
+            notifyResultAlert.removeClass('d-none alert-danger')
+                .addClass('alert-success')
+                .html('<i class="fas fa-check-circle ml-1"></i> ההודעה נשלחה בהצלחה ' + modeText + '!');
+
+            notifySubmitBtn.html('<i class="fas fa-check ml-1"></i> נשלח בהצלחה!');
+
+            setTimeout(function () {
+                notifyModal.modal('hide');
+                notifySubmitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane ml-1"></i> שלח הודעה');
+                notifyCancelBtn.prop('disabled', false);
+            }, 1800);
+        }).catch(function (err) {
+            console.error('Error sending system notifications:', err);
+            notifyProgressLabel.text('אירעה שגיאה בשליחה');
+            notifyResultAlert.removeClass('d-none alert-success')
+                .addClass('alert-danger')
+                .html('<i class="fas fa-exclamation-triangle ml-1"></i> שגיאה בשליחת ההודעות: ' + (err.message || err));
+            notifySubmitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane ml-1"></i> שלח שוב');
+            notifyCancelBtn.prop('disabled', false);
         });
     });
 

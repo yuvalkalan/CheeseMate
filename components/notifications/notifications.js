@@ -268,15 +268,39 @@ var NotificationsManager = (function () {
             }
 
             var iconHtml = '<i class="fas fa-check-circle text-success notification-icon"></i>';
+            var isSystem = (notif.type === 'system' || notif.type === 'update' || notif.type === 'alert' || notif.type === 'system_broadcast' || notif.type === 'system_direct');
             if (notif.type === 'friend_request_accepted') {
                 iconHtml = '<i class="fas fa-user-check text-success notification-icon"></i>';
             } else if (notif.type === 'friend_request_received') {
                 iconHtml = '<i class="fas fa-user-plus text-primary notification-icon"></i>';
+            } else if (notif.type === 'update') {
+                iconHtml = '<i class="fas fa-star text-info notification-icon"></i>';
+            } else if (notif.type === 'alert') {
+                iconHtml = '<i class="fas fa-exclamation-circle text-danger notification-icon"></i>';
+            } else if (isSystem) {
+                iconHtml = '<i class="fas fa-bullhorn text-warning notification-icon"></i>';
             }
 
             var icon = $(iconHtml);
             var content = $('<div class="notification-content"></div>');
-            var msg = $('<div class="notification-message"></div>').text(notif.message || '');
+            var msg = $('<div class="notification-message"></div>');
+
+            if (isSystem) {
+                var badgeText = 'מערכת';
+                var badgeClass = 'badge-warning text-dark';
+                if (notif.type === 'update') {
+                    badgeText = 'עדכון';
+                    badgeClass = 'badge-info text-white';
+                } else if (notif.type === 'alert') {
+                    badgeText = 'התראה';
+                    badgeClass = 'badge-danger text-white';
+                }
+                msg.append($('<span class="badge ' + badgeClass + ' ml-1 font-weight-normal"></span>').text(badgeText));
+                msg.append($('<span></span>').text(' ' + (notif.message || '')));
+            } else {
+                msg.text(notif.message || '');
+            }
+
             var time = $('<div class="notification-time"></div>').text(formatTimeAgo(notif.timestamp));
 
             content.append(msg, time);
@@ -328,7 +352,8 @@ var NotificationsManager = (function () {
 
     NotificationsManager.prototype.showDesktopNotification = function (notifData) {
         var that = this;
-        var title = 'CheeseMate';
+        var isSystem = (notifData.type === 'system' || notifData.type === 'update' || notifData.type === 'alert' || notifData.type === 'system_broadcast' || notifData.type === 'system_direct');
+        var title = isSystem ? (notifData.fromUsername || 'CheeseMate - הודעת מערכת') : 'CheeseMate';
         var options = {
             body: notifData.message || 'התקבלה הודעה חדשה ב-CheeseMate',
             icon: '/icons/android-chrome-192x192.png',
@@ -337,7 +362,7 @@ var NotificationsManager = (function () {
             renotify: true,
             vibrate: [200, 100, 200],
             data: {
-                url: '/?tab=friends'
+                url: isSystem ? '/' : '/?tab=friends'
             }
         };
 

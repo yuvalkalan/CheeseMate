@@ -8,7 +8,7 @@
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="stylesheet" href="/modules/bootstrap-rtl/css/bootstrap.min.css">
     <link rel="stylesheet" href="/modules/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="/admin/admin.css?v=2">
+    <link rel="stylesheet" href="/admin/admin.css?v=3">
 </head>
 <body>
 
@@ -168,6 +168,9 @@
                         <i class="fas fa-users-cog ml-2"></i> ניהול משתמשים
                     </h5>
                     <div class="d-flex align-items-center flex-wrap gap-2">
+                        <button id="admin-open-notify-modal-btn" class="btn btn-warning btn-sm font-weight-bold ml-2 text-dark shadow-sm" title="שליחת הודעת מערכת למשתמשים">
+                            <i class="fas fa-bullhorn ml-1"></i> שליחת הודעת מערכת
+                        </button>
                         <a href="https://console.firebase.google.com/project/cheesemate-yk/authentication/users" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ml-2" title="פתיחת מסוף משתמשי Firebase Authentication">
                             <i class="fas fa-external-link-alt ml-1"></i> מסוף Firebase Auth
                         </a>
@@ -226,6 +229,146 @@
         </div>
     </div>
 
+    <!-- Send System Notification Modal -->
+    <div class="modal fade" id="sendNotificationModal" tabindex="-1" role="dialog" aria-labelledby="sendNotificationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title font-weight-bold" id="sendNotificationModalLabel">
+                        <i class="fas fa-bullhorn ml-2 text-warning"></i> שליחת הודעת מערכת (System Notification)
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="admin-send-notification-form">
+                    <div class="modal-body">
+                        <!-- Recipient Selection -->
+                        <div class="form-group">
+                            <label class="font-weight-bold d-block mb-2">קהל יעד (נמענים):</label>
+                            <div class="custom-control custom-radio custom-control-inline mb-2">
+                                <input type="radio" id="notify-target-broadcast" name="notifyTargetMode" class="custom-control-input" value="broadcast" checked>
+                                <label class="custom-control-label font-weight-bold" for="notify-target-broadcast">
+                                    <i class="fas fa-broadcast-tower text-primary ml-1"></i> שידור לכל המשתמשים (Broadcast) <span class="badge badge-primary font-weight-normal mr-1">ברירת מחדל</span>
+                                </label>
+                            </div>
+                            <div class="custom-control custom-radio custom-control-inline mb-2">
+                                <input type="radio" id="notify-target-specific" name="notifyTargetMode" class="custom-control-input" value="specific">
+                                <label class="custom-control-label font-weight-bold" for="notify-target-specific">
+                                    <i class="fas fa-user-tag text-info ml-1"></i> משתמשים ספציפיים (Specific users)
+                                </label>
+                            </div>
+
+                            <!-- Broadcast Info Box -->
+                            <div id="notify-broadcast-info" class="alert alert-info py-2 small mt-2 mb-0">
+                                <i class="fas fa-info-circle ml-1"></i> ההודעה תישלח לכל <strong><span id="notify-broadcast-count">0</span></strong> המשתמשים הרשומים במערכת.
+                            </div>
+
+                            <!-- Specific Users Picker Container (hidden by default) -->
+                            <div id="notify-specific-users-container" class="border rounded p-3 mt-2 bg-light d-none">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        </div>
+                                        <input type="text" id="notify-user-search" class="form-control" placeholder="חיפוש משתמש לפי שם / מייל...">
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="notify-select-all-btn">בחר הכל</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="notify-deselect-all-btn">נקה בחירה</button>
+                                        <span id="notify-selected-users-badge" class="badge badge-primary mr-2 font-weight-normal py-1 px-2">נבחרו 0 משתמשים</span>
+                                    </div>
+                                </div>
+                                <div id="notify-users-checklist" class="notify-users-list border rounded bg-white p-2">
+                                    <!-- Populated dynamically with checkboxes -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notification Content -->
+                        <div class="row">
+                            <div class="col-md-7">
+                                <div class="form-group">
+                                    <label for="notify-sender-name" class="font-weight-bold small">שם השולח / כותרת:</label>
+                                    <input type="text" id="notify-sender-name" class="form-control" value="מערכת CheeseMate" maxlength="100" required>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label for="notify-type-select" class="font-weight-bold small">סוג הודעה:</label>
+                                    <select id="notify-type-select" class="custom-select">
+                                        <option value="system" selected>הודעת מערכת כללית (System)</option>
+                                        <option value="update">עדכון פיצ'ר / גרסה (Update)</option>
+                                        <option value="alert">התראה חשובה (Important Notice)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="notify-message-text" class="font-weight-bold small mb-0">תוכן ההודעה:</label>
+                                <span class="small text-muted"><span id="notify-char-counter">0</span> / 500</span>
+                            </div>
+                            <textarea id="notify-message-text" class="form-control" rows="3" maxlength="500" required placeholder="כתבו כאן את תוכן ההודעה (עד 500 תווים)..."></textarea>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="notify-send-push" checked>
+                                <label class="custom-control-label small" for="notify-send-push">
+                                    <i class="fas fa-mobile-alt text-primary ml-1"></i> שלח גם התראת Web Push (למכשירים וסמארטפונים עם התראות מופעלות)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Preview Card -->
+                        <div class="card bg-light border mb-0">
+                            <div class="card-header py-1 px-3 bg-white border-bottom">
+                                <small class="font-weight-bold text-muted"><i class="fas fa-eye ml-1"></i> תצוגה מקדימה במערכת ההתראות של המשתמש:</small>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-start p-2 border rounded bg-white">
+                                    <div id="notify-preview-icon" class="mr-2 ml-2 mt-1">
+                                        <i class="fas fa-bullhorn text-warning fa-lg"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-1">
+                                            <span class="badge badge-warning text-dark ml-2" id="notify-preview-badge">מערכת</span>
+                                            <strong class="small text-dark" id="notify-preview-sender">מערכת CheeseMate</strong>
+                                        </div>
+                                        <div id="notify-preview-msg" class="text-secondary small" style="word-break: break-word;">
+                                            (תוכן ההודעה יוצג כאן...)
+                                        </div>
+                                        <small class="text-muted d-block mt-1">ממש עכשיו</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sending Progress / Status Box -->
+                        <div id="notify-progress-box" class="mt-3 d-none">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small font-weight-bold" id="notify-progress-label">שולח הודעות...</span>
+                                <span class="small font-weight-bold" id="notify-progress-percent">0%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div id="notify-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;"></div>
+                            </div>
+                            <div id="notify-result-alert" class="alert py-2 small mt-2 d-none" role="alert"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal" id="notify-cancel-btn">ביטול</button>
+                        <button type="submit" class="btn btn-primary font-weight-bold" id="notify-submit-btn">
+                            <i class="fas fa-paper-plane ml-1"></i> שלח הודעה
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Delete Confirmation Modal -->
     <div class="modal fade" id="deleteUserModal" tabindex="-1" role="dialog" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
@@ -269,6 +412,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore-compat.js"></script>
-    <script src="/admin/admin.js?v=2"></script>
+    <script src="/components/notifications/notifications.js?v=21"></script>
+    <script src="/admin/admin.js?v=3"></script>
 </body>
 </html>
