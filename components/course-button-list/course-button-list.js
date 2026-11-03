@@ -51,12 +51,12 @@ var CourseButtonList = (function () {
             }
         }
         if (!count || count <= 0) {
-            return 'אין חברים באותם אירועים בקורס זה';
+            return 'אין חברים הלוקחים קורס זה';
         }
         if (count === 1) {
-            return 'חבר אחד באותם אירועים בקורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
+            return 'חבר אחד לוקח קורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
         }
-        return count + ' חברים באותם אירועים בקורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
+        return count + ' חברים לוקחים קורס זה' + namesSuffix + ' (לחץ להצגת הרשימה)';
     }
 
     function getStudentCountTooltipText(count) {
@@ -846,7 +846,7 @@ var CourseButtonList = (function () {
 
         var friends = friendData.friends || [];
         if (friends.length === 0) {
-            modalContent.append($('<div class="course-friends-empty text-center py-3">אין חברים שרשומים לאותם אירועים איתך בקורס זה.</div>'));
+            modalContent.append($('<div class="course-friends-empty text-center py-3">אין חברים הלוקחים קורס זה.</div>'));
         } else {
             var friendsList = $('<div class="list-group"></div>');
             friends.forEach(function (f) {
@@ -883,7 +883,7 @@ var CourseButtonList = (function () {
         }
 
         BootstrapDialog.show({
-            title: $('<span class="d-flex align-items-center"><i class="fas fa-heart text-danger ml-2"></i> חברים באותם אירועים בקורס (' + friends.length + ')</span>'),
+            title: $('<span class="d-flex align-items-center"><i class="fas fa-heart text-danger ml-2"></i> חברים הלוקחים את הקורס (' + friends.length + ')</span>'),
             message: modalContent,
             buttons: [{
                 label: 'סגור',

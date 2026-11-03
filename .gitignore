@@ -2,3 +2,5 @@ node_modules/
 .firebase/
 firebase-debug.log
 .wrangler/
+backups/
+.env

@@ -20,6 +20,7 @@
     }
   },
   "hosting": {
+    "site": "cheesemate-yk",
     "public": ".",
     "cleanUrls": true,
     "rewrites": [
@@ -38,6 +39,8 @@
       "firestore.indexes.json",
       "**/.*",
       "**/node_modules/**",
+      "backups/**",
+      "scripts/**",
       "ci/**",
       "package.json",
       "package-lock.json",

@@ -13,8 +13,9 @@ def get_last_semesters():
         "https://michael-maltsev.github.io/technion-sap-info-fetcher/last_semesters.json"
     )
 
-    latest_semesters = requests.get(latest_semesters_url).json()
-    sap_semesters_response = requests.get(sap_semesters_url).json()
+    headers = {"User-Agent": "CheeseMate-CI/1.0"}
+    latest_semesters = requests.get(latest_semesters_url, headers=headers).json()
+    sap_semesters_response = requests.get(sap_semesters_url, headers=headers).json()
 
     sap_semesters = {}
     for sap_semester in sap_semesters_response:
@@ -50,7 +51,7 @@ def get_available_semesters(index_html_path: Path):
     index_html = index_html_path.read_text(encoding="utf-8")
 
     available_semesters = re.findall(
-        r"\bvar availableSemesters = ([^;]*);\n", index_html
+        r"\bvar availableSemesters = ([^;]*);\r?\n", index_html
     )
     if len(available_semesters) != 1:
         raise RuntimeError("Could not find availableSemesters in index.html")
@@ -68,7 +69,7 @@ def set_available_semesters(index_html_path: Path, available_semesters: dict):
     available_semesters_str = re.sub(r'\}$', r'\n    \g<0>', available_semesters_str)
 
     index_html, number_of_subs_made = re.subn(
-        r"(\bvar availableSemesters = )[^;]*(;\n)",
+        r"(\bvar availableSemesters = )[^;]*(;\r?\n)",
         rf"\g<1>{available_semesters_str.replace('\\', '\\\\')}\g<2>",
         index_html,
     )

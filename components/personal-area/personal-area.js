@@ -67,6 +67,10 @@ var PersonalArea = (function () {
 
         var userRef = this.firestoreDb.collection('users').doc(user.uid);
         this.unsubscribeUserDoc = userRef.onSnapshot(function (snapshot) {
+            if (snapshot.metadata && snapshot.metadata.fromCache && !snapshot.exists) {
+                return;
+            }
+
             var data = snapshot.exists ? snapshot.data() : {};
             var defaultUsername = deriveDefaultUsername(user);
             var emailLower = (user.email || '').toLowerCase();
@@ -75,34 +79,58 @@ var PersonalArea = (function () {
                 levelToSave = data.level;
             }
 
-            var needsInit = !snapshot.exists ||
+            var isConfirmedServerSnapshot = !(snapshot.metadata && (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites));
+            var needsInit = isConfirmedServerSnapshot && (
+                !snapshot.exists ||
                 !data.username ||
                 typeof data.level !== 'number' ||
                 data.usernameLower !== (data.username || defaultUsername).toLowerCase() ||
                 (emailLower && data.email !== emailLower) ||
-                data.uid !== user.uid;
+                data.uid !== user.uid
+            );
 
             if (needsInit) {
                 var usernameToSave = data.username || defaultUsername;
                 var initUpdate = {
                     uid: user.uid,
+                    email: emailLower
+                };
+                if (!data.username) {
+                    initUpdate.username = usernameToSave;
+                    initUpdate.usernameLower = usernameToSave.toLowerCase();
+                    initUpdate.displayName = usernameToSave;
+                } else {
+                    if (data.usernameLower !== data.username.toLowerCase()) {
+                        initUpdate.usernameLower = data.username.toLowerCase();
+                    }
+                    if (!data.displayName) {
+                        initUpdate.displayName = data.username;
+                    }
+                }
+                if (typeof data.level !== 'number') {
+                    initUpdate.level = levelToSave;
+                }
+                if (!Array.isArray(data.friends)) {
+                    initUpdate.friends = firebase.firestore.FieldValue.arrayUnion();
+                }
+                if (!Array.isArray(data.incomingRequests)) {
+                    initUpdate.incomingRequests = firebase.firestore.FieldValue.arrayUnion();
+                }
+                if (!Array.isArray(data.outgoingRequests)) {
+                    initUpdate.outgoingRequests = firebase.firestore.FieldValue.arrayUnion();
+                }
+                userRef.set(initUpdate, { merge: true });
+                data = $.extend({}, data, {
+                    uid: user.uid,
                     email: emailLower,
                     username: usernameToSave,
                     usernameLower: usernameToSave.toLowerCase(),
-                    displayName: usernameToSave,
-                    level: levelToSave
-                };
-                if (!Array.isArray(data.friends)) {
-                    initUpdate.friends = [];
-                }
-                if (!Array.isArray(data.incomingRequests)) {
-                    initUpdate.incomingRequests = [];
-                }
-                if (!Array.isArray(data.outgoingRequests)) {
-                    initUpdate.outgoingRequests = [];
-                }
-                userRef.set(initUpdate, { merge: true });
-                data = $.extend({}, data, initUpdate);
+                    displayName: data.displayName || usernameToSave,
+                    level: levelToSave,
+                    friends: Array.isArray(data.friends) ? data.friends : [],
+                    incomingRequests: Array.isArray(data.incomingRequests) ? data.incomingRequests : [],
+                    outgoingRequests: Array.isArray(data.outgoingRequests) ? data.outgoingRequests : []
+                });
             }
 
             that.userDocData = data;

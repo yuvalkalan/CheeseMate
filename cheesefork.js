@@ -1104,38 +1104,18 @@
                         });
                     }
 
-                    // 2. Track shared events between current user and friend in user's courses (for course button badge)
-                    var userCourses = currentSavedSession && currentSavedSession[semesterCoursesKey];
-                    if (Array.isArray(userCourses)) {
-                        userCourses.forEach(function (course) {
-                            var courseKey = currentSemester + '_' + course;
-                            var myCourseSelections = currentSavedSession[courseKey] || {};
-                            var friendCourseSelections = data[courseKey];
-
-                            if (friendCourseSelections && typeof friendCourseSelections === 'object') {
-                                var sharedLessonTypes = [];
-                                Object.keys(myCourseSelections).forEach(function (lessonType) {
-                                    var myLessonNum = myCourseSelections[lessonType];
-                                    var friendLessonNum = friendCourseSelections[lessonType];
-                                    if (myLessonNum !== undefined && myLessonNum !== null && myLessonNum !== '-' &&
-                                        friendLessonNum !== undefined && friendLessonNum !== null && friendLessonNum !== '-' &&
-                                        String(myLessonNum) === String(friendLessonNum)) {
-                                        sharedLessonTypes.push(lessonType + ' ' + myLessonNum);
-                                    }
-                                });
-
-                                if (sharedLessonTypes.length > 0) {
-                                    if (!courseFriendMap[course]) {
-                                        courseFriendMap[course] = {};
-                                    }
-                                    courseFriendMap[course][uid] = {
-                                        uid: uid,
-                                        username: friendName,
-                                        email: profile.email || '',
-                                        events: sharedLessonTypes
-                                    };
-                                }
+                    // 2. Track friends attending each course (for course button badge)
+                    if (Array.isArray(friendCourses)) {
+                        friendCourses.forEach(function (course) {
+                            if (!courseFriendMap[course]) {
+                                courseFriendMap[course] = {};
                             }
+
+                            courseFriendMap[course][uid] = {
+                                uid: uid,
+                                username: friendName,
+                                email: profile.email || ''
+                            };
                         });
                     }
                 }
@@ -1695,14 +1675,22 @@
                     return;
                 }
 
+                if (!firstDataLoaded && result.metadata && result.metadata.fromCache && !result.exists) {
+                    return;
+                }
+
                 if (!firstDataLoaded) {
                     // Save name in server for sharing purposes.
                     // Note: Setting displayName serves two purposes, saving the
                     // name and actually creating the document for the semester
                     // if it doesn't exist yet. So set it even if it's null.
-                    var initialDisplayName = (personalArea && personalArea.getCurrentUsername()) ||
-                        (firebase.auth().currentUser.email ? firebase.auth().currentUser.email.split('@')[0] : firebase.auth().currentUser.displayName);
-                    doc.set({ displayName: initialDisplayName }, { merge: true });
+                    if (personalArea && personalArea.userDocData && personalArea.userDocData.username) {
+                        doc.set({ displayName: personalArea.userDocData.username }, { merge: true });
+                    } else if (!result.exists || !result.data().displayName) {
+                        var initialDisplayName = (personalArea && personalArea.getCurrentUsername()) ||
+                            (firebase.auth().currentUser.email ? firebase.auth().currentUser.email.split('@')[0] : firebase.auth().currentUser.displayName);
+                        doc.set({ displayName: initialDisplayName }, { merge: true });
+                    }
                 }
 
                 var session = savedSessionFromFirestoreData(result.exists ? result.data() : {});
