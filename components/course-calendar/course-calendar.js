@@ -910,7 +910,7 @@ var CourseCalendar = (function () {
         // Save a spot for me button
         var saveSpotBox = $('<div class="event-friends-save-spot-box mb-3"></div>');
         var saveSpotBtn = $('<button type="button" class="btn btn-primary btn-block btn-save-spot-request d-flex align-items-center justify-content-center py-2 font-weight-bold" data-action="save-spot-for-me">' +
-            '<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>' +
+            '<i class="fas fa-chair ml-2"></i> <span>שמור לי מקום!</span>' +
             '</button>');
         saveSpotBox.append(saveSpotBtn);
         modalContent.append(saveSpotBox);
@@ -987,13 +987,13 @@ var CourseCalendar = (function () {
                 personalArea.getCurrentUsername() :
                 (currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'חבר'));
 
-            var notifMessage = senderName + ': "Save a spot for me!" ב-' + courseTitle + (eventDetails ? ' (' + eventDetails + ')' : '');
+            var notifMessage = senderName + ': "שמור לי מקום!" ב-' + courseTitle + (eventDetails ? ' (' + eventDetails + ')' : '');
 
             var db = courseCalendar.getFirestoreDb ? courseCalendar.getFirestoreDb() : (courseCalendar.firestoreDb || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && firebase.firestore ? firebase.firestore() : null));
             if (!db) {
                 alert('שגיאת התחברות למסד הנתונים');
                 saveSpotBtn.prop('disabled', false).removeClass('disabled')
-                    .html('<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>');
+                    .html('<i class="fas fa-chair ml-2"></i> <span>שמור לי מקום!</span>');
                 return;
             }
 
@@ -1033,7 +1033,7 @@ var CourseCalendar = (function () {
                     return notifRef.set(notifData).then(function () {
                         if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
                             return NotificationsManager.sendPush(targetUid, {
-                                title: 'CheeseMate - Save a spot for me!',
+                                title: 'CheeseMate - שמור לי מקום!',
                                 body: notifMessage,
                                 icon: '/icons/android-chrome-192x192.png',
                                 badge: '/icons/favicon-32x32.png',
@@ -1052,7 +1052,7 @@ var CourseCalendar = (function () {
                 console.error('Error sending save a spot request:', err);
                 alert('שגיאה בשליחת הבקשה: ' + (err.message || err));
                 saveSpotBtn.prop('disabled', false).removeClass('disabled')
-                    .html('<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>');
+                    .html('<i class="fas fa-chair ml-2"></i> <span>שמור לי מקום!</span>');
             });
         });
 

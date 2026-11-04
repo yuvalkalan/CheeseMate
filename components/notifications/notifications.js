@@ -261,12 +261,12 @@ var NotificationsManager = (function () {
                 saveBtn.removeClass('btn-success').addClass('btn-secondary btn-spot-taken disabled')
                     .prop('disabled', true)
                     .attr('data-action', 'spot-taken')
-                    .html('<i class="fas fa-check-circle ml-1"></i> Spot taken!');
+                    .html('<i class="fas fa-check-circle ml-1"></i> נתפס מקום!');
                 return;
             }
             container.empty();
             var takenBtn = $('<button type="button" class="btn btn-sm btn-secondary btn-spot-taken disabled" disabled data-action="spot-taken">' +
-                '<i class="fas fa-check-circle ml-1"></i> Spot taken!' +
+                '<i class="fas fa-check-circle ml-1"></i> נתפס מקום!' +
                 '</button>');
             container.append(takenBtn);
         }
@@ -319,7 +319,7 @@ var NotificationsManager = (function () {
                 console.error('Error taking spot:', err);
                 alert('שגיאה בשמירת מקום: ' + (err.message || err));
                 if (saveBtn) {
-                    saveBtn.prop('disabled', false).removeClass('disabled').html('<i class="fas fa-check ml-1"></i> I\'ve saved a spot');
+                    saveBtn.prop('disabled', false).removeClass('disabled').html('<i class="fas fa-check ml-1"></i> שמרתי מקום!');
                 }
                 if (cancelBtn) {
                     cancelBtn.prop('disabled', false).removeClass('disabled');
@@ -329,7 +329,7 @@ var NotificationsManager = (function () {
             that.markAsRead(notif.id);
             var container = that.element.find('.notification-spot-actions[data-request-id="' + reqId + '"]');
             if (container.length) {
-                container.empty().append($('<span class="text-muted small">Cancelled</span>'));
+                container.empty().append($('<span class="text-muted small">בוטל</span>'));
             }
         }
     };
@@ -442,22 +442,22 @@ var NotificationsManager = (function () {
                 var cachedData = that.spotRequestData[reqId];
                 if (cachedData && cachedData.status === 'taken') {
                     var takenBtn = $('<button type="button" class="btn btn-sm btn-secondary btn-spot-taken disabled" disabled data-action="spot-taken">' +
-                        '<i class="fas fa-check-circle ml-1"></i> Spot taken!' +
+                        '<i class="fas fa-check-circle ml-1"></i> נתפס מקום!' +
                         '</button>');
                     actionsDiv.append(takenBtn);
                 } else {
                     var saveBtn = $('<button type="button" class="btn btn-sm btn-success btn-save-spot mr-2" data-action="saved-spot">' +
-                        '<i class="fas fa-check ml-1"></i> I\'ve saved a spot' +
+                        '<i class="fas fa-check ml-1"></i> שמרתי מקום!' +
                         '</button>');
 
                     var cancelBtn = $('<button type="button" class="btn btn-sm btn-outline-secondary btn-cancel-spot" data-action="cancel-spot">' +
-                        '<i class="fas fa-times ml-1"></i> Cancel' +
+                        '<i class="fas fa-times ml-1"></i> ביטול' +
                         '</button>');
 
                     saveBtn.click(function (e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        saveBtn.prop('disabled', true).addClass('disabled').html('<i class="fas fa-spinner fa-spin ml-1"></i> Saving...');
+                        saveBtn.prop('disabled', true).addClass('disabled').html('<i class="fas fa-spinner fa-spin ml-1"></i> שומר...');
                         cancelBtn.prop('disabled', true).addClass('disabled');
                         that.respondToSpotRequest(notif, reqId, 'taken', saveBtn, cancelBtn);
                     });
