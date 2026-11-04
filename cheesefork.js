@@ -161,6 +161,7 @@
         });
 
         courseCalendar = new CourseCalendar($('#course-calendar'), {
+            firestoreDb: firestoreDb,
             courseManager: courseManager,
             colorGenerator: courseColorGenerator,
             readonly: viewingSharedSchedule,
@@ -1028,6 +1029,8 @@
             listElement: $('#notifications-list-container'),
             markAllBtn: $('#notifications-mark-all-read')
         });
+        window.personalArea = personalArea;
+        window.notificationsManager = notificationsManager;
 
         watchCourseStudentCounts();
     }

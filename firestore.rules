@@ -39,6 +39,7 @@ rules_version = '2';
 //   - message: string (required, 1..500 chars) - notification text message
 //   - timestamp: number (required, positive) - client timestamp of the notification
 //   - read: bool (required, initially false on create) - whether notification was read
+//   - requestId: string or null (optional, max 128 chars) - ID of the spotRequest associated with this notification
 //
 // Collection: courseFeedback
 // Document ID: {courseId} (course number, e.g. "02340118")
@@ -70,6 +71,24 @@ rules_version = '2';
 //   - level: number (required) - numeric permission level identifier (0 = user, 1 = admin, 2 = atmosphere)
 //   - name: string (required, 1..50 chars) - display name of the permission level
 //   - description: string (optional, max 200 chars) - description of permissions granted
+//
+// Collection: spotRequests
+// Document ID: {requestId}
+// Fields:
+//   - requestId: string (required, 1..128 chars) - unique identifier matching the document ID
+//   - requesterUid: string (required, 1..128 chars) - UID of the user requesting a spot
+//   - requesterUsername: string (required, 1..200 chars) - username or display name of the requester
+//   - courseNumber: string or null (optional, max 50 chars) - course number for the spot request
+//   - courseTitle: string or null (optional, max 200 chars) - course title for the spot request
+//   - eventDetails: string or null (optional, max 500 chars) - description or details of the event/lesson
+//   - lessonType: string or null (optional, max 50 chars) - lesson type (e.g. lecture, tutorial, lab)
+//   - lessonNum: string or null (optional, max 50 chars) - group or lesson number
+//   - recipients: list of strings (required, max 500 items) - friend UIDs who received this request
+//   - status: string (required, 'pending' or 'taken') - status of the request
+//   - savedByUid: string or null (optional, max 128 chars) - UID of user who saved the spot
+//   - savedByUsername: string or null (optional, max 200 chars) - username of user who saved the spot
+//   - createdAt: number (required, positive) - creation timestamp in epoch milliseconds
+//   - updatedAt: number (required, positive) - last update timestamp in epoch milliseconds
 //
 // ===============================================================
 
@@ -175,14 +194,15 @@ service cloud.firestore {
 
     // Validate user notification document
     function isValidNotification(data) {
-      return hasOnlyAllowedFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read']) &&
+      return hasOnlyAllowedFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read', 'requestId']) &&
         hasRequiredFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read']) &&
         data.type is string && data.type.size() >= 1 && data.type.size() <= 50 &&
         data.fromUid is string && data.fromUid.size() >= 1 && data.fromUid.size() <= 128 &&
         data.fromUsername is string && data.fromUsername.size() >= 1 && data.fromUsername.size() <= 200 &&
         data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
         data.timestamp is number && data.timestamp > 0 &&
-        data.read is bool;
+        data.read is bool &&
+        (!('requestId' in data) || data.requestId == null || (data.requestId is string && data.requestId.size() <= 128));
     }
 
     // Validate a single course feedback post entry
@@ -234,6 +254,26 @@ service cloud.firestore {
         data.level is number &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
         (!('description' in data) || (data.description is string && data.description.size() <= 200));
+    }
+
+    // Validate spot request document
+    function isValidSpotRequest(data) {
+      return hasOnlyAllowedFields(['requestId', 'requesterUid', 'requesterUsername', 'courseNumber', 'courseTitle', 'eventDetails', 'lessonType', 'lessonNum', 'recipients', 'status', 'savedByUid', 'savedByUsername', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['requestId', 'requesterUid', 'requesterUsername', 'recipients', 'status', 'createdAt', 'updatedAt']) &&
+        data.requestId is string && data.requestId.size() >= 1 && data.requestId.size() <= 128 &&
+        data.requesterUid is string && data.requesterUid.size() >= 1 && data.requesterUid.size() <= 128 &&
+        data.requesterUsername is string && data.requesterUsername.size() >= 1 && data.requesterUsername.size() <= 200 &&
+        (!('courseNumber' in data) || data.courseNumber == null || (data.courseNumber is string && data.courseNumber.size() <= 50)) &&
+        (!('courseTitle' in data) || data.courseTitle == null || (data.courseTitle is string && data.courseTitle.size() <= 200)) &&
+        (!('eventDetails' in data) || data.eventDetails == null || (data.eventDetails is string && data.eventDetails.size() <= 500)) &&
+        (!('lessonType' in data) || data.lessonType == null || (data.lessonType is string && data.lessonType.size() <= 50)) &&
+        (!('lessonNum' in data) || data.lessonNum == null || (data.lessonNum is string && data.lessonNum.size() <= 50)) &&
+        data.recipients is list && data.recipients.size() <= 500 &&
+        data.status is string && (data.status == 'pending' || data.status == 'taken') &&
+        (!('savedByUid' in data) || data.savedByUid == null || (data.savedByUid is string && data.savedByUid.size() <= 128)) &&
+        (!('savedByUsername' in data) || data.savedByUsername == null || (data.savedByUsername is string && data.savedByUsername.size() <= 200)) &&
+        data.createdAt is number && data.createdAt > 0 &&
+        data.updatedAt is number && data.updatedAt > 0;
     }
 
     // ===============================================================
@@ -327,6 +367,25 @@ service cloud.firestore {
         request.resource.data.posts.hasAll(resource.data.posts);
 
       allow delete: if false;
+    }
+
+    // Spot requests collection for "Save a spot for me!" feature
+    match /spotRequests/{requestId} {
+      allow get, list: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.requesterUid &&
+        isValidSpotRequest(request.resource.data) &&
+        request.resource.data.status == 'pending';
+
+      allow update: if isAuthenticated() &&
+        (request.auth.uid in resource.data.recipients ||
+         request.auth.uid == resource.data.requesterUid ||
+         isAdmin()) &&
+        isValidSpotRequest(request.resource.data);
+
+      allow delete: if isAuthenticated() &&
+        (request.auth.uid == resource.data.requesterUid || isAdmin());
     }
 
     // Default deny for all other collections and documents

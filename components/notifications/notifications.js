@@ -50,6 +50,8 @@ var NotificationsManager = (function () {
         this.notifications = [];
         this.initialLoadDone = false;
         this.swRegistration = null;
+        this.spotRequestListeners = {};
+        this.spotRequestData = {};
 
         this.initUI();
         this.initServiceWorker();
@@ -228,6 +230,108 @@ var NotificationsManager = (function () {
             this.unsubscribe();
             this.unsubscribe = null;
         }
+        this.stopSpotRequestListeners();
+    };
+
+    NotificationsManager.prototype.stopSpotRequestListeners = function () {
+        var that = this;
+        if (that.spotRequestListeners) {
+            Object.keys(that.spotRequestListeners).forEach(function (reqId) {
+                if (typeof that.spotRequestListeners[reqId] === 'function') {
+                    try {
+                        that.spotRequestListeners[reqId]();
+                    } catch (e) {}
+                }
+            });
+            that.spotRequestListeners = {};
+        }
+    };
+
+    NotificationsManager.prototype.updateSpotRequestUI = function (requestId, data) {
+        var that = this;
+        if (!that.element || !requestId) return;
+
+        var container = that.element.find('.notification-spot-actions[data-request-id="' + requestId + '"]');
+        if (!container.length) return;
+
+        if (data && data.status === 'taken') {
+            var saveBtn = container.find('.btn-save-spot');
+            container.find('.btn-cancel-spot').remove();
+            if (saveBtn.length > 0) {
+                saveBtn.removeClass('btn-success').addClass('btn-secondary btn-spot-taken disabled')
+                    .prop('disabled', true)
+                    .attr('data-action', 'spot-taken')
+                    .html('<i class="fas fa-check-circle ml-1"></i> Spot taken!');
+                return;
+            }
+            container.empty();
+            var takenBtn = $('<button type="button" class="btn btn-sm btn-secondary btn-spot-taken disabled" disabled data-action="spot-taken">' +
+                '<i class="fas fa-check-circle ml-1"></i> Spot taken!' +
+                '</button>');
+            container.append(takenBtn);
+        }
+    };
+
+    NotificationsManager.prototype.respondToSpotRequest = function (notif, reqId, action, saveBtn, cancelBtn) {
+        var that = this;
+        if (!that.currentUser || !that.firestoreDb || !reqId) return;
+
+        if (action === 'taken') {
+            var myUsername = (typeof personalArea !== 'undefined' && personalArea && personalArea.getCurrentUsername) ?
+                personalArea.getCurrentUsername() :
+                (that.currentUser.displayName || (that.currentUser.email ? that.currentUser.email.split('@')[0] : 'חבר'));
+
+            var spotRef = that.firestoreDb.collection('spotRequests').doc(reqId);
+            spotRef.update({
+                status: 'taken',
+                savedByUid: that.currentUser.uid,
+                savedByUsername: myUsername,
+                updatedAt: Date.now()
+            }).then(function () {
+                that.markAsRead(notif.id);
+                that.spotRequestData[reqId] = { status: 'taken', savedByUid: that.currentUser.uid, savedByUsername: myUsername };
+                that.updateSpotRequestUI(reqId, that.spotRequestData[reqId]);
+
+                if (notif.fromUid && notif.fromUid !== that.currentUser.uid) {
+                    var confirmMsg = myUsername + ' שמר/ה לך מקום!';
+                    var reqNotifRef = that.firestoreDb.collection('users').doc(notif.fromUid).collection('notifications').doc();
+                    reqNotifRef.set({
+                        type: 'general',
+                        fromUid: that.currentUser.uid,
+                        fromUsername: myUsername,
+                        message: confirmMsg,
+                        timestamp: Date.now(),
+                        read: false
+                    }).catch(function () {});
+
+                    if (NotificationsManager.sendPush) {
+                        NotificationsManager.sendPush(notif.fromUid, {
+                            title: 'CheeseMate - מקום נשמר!',
+                            body: confirmMsg,
+                            icon: '/icons/android-chrome-192x192.png',
+                            badge: '/icons/favicon-32x32.png',
+                            url: '/?tab=friends',
+                            tag: reqNotifRef.id
+                        });
+                    }
+                }
+            }).catch(function (err) {
+                console.error('Error taking spot:', err);
+                alert('שגיאה בשמירת מקום: ' + (err.message || err));
+                if (saveBtn) {
+                    saveBtn.prop('disabled', false).removeClass('disabled').html('<i class="fas fa-check ml-1"></i> I\'ve saved a spot');
+                }
+                if (cancelBtn) {
+                    cancelBtn.prop('disabled', false).removeClass('disabled');
+                }
+            });
+        } else if (action === 'cancelled') {
+            that.markAsRead(notif.id);
+            var container = that.element.find('.notification-spot-actions[data-request-id="' + reqId + '"]');
+            if (container.length) {
+                container.empty().append($('<span class="text-muted small">Cancelled</span>'));
+            }
+        }
     };
 
     NotificationsManager.prototype.render = function (notifs, unreadCount) {
@@ -273,6 +377,8 @@ var NotificationsManager = (function () {
                 iconHtml = '<i class="fas fa-user-check text-success notification-icon"></i>';
             } else if (notif.type === 'friend_request_received') {
                 iconHtml = '<i class="fas fa-user-plus text-primary notification-icon"></i>';
+            } else if (notif.type === 'save_spot_request') {
+                iconHtml = '<i class="fas fa-chair text-primary notification-icon"></i>';
             } else if (notif.type === 'update') {
                 iconHtml = '<i class="fas fa-star text-info notification-icon"></i>';
             } else if (notif.type === 'alert') {
@@ -328,6 +434,58 @@ var NotificationsManager = (function () {
             var time = $('<div class="notification-time"></div>').text(formatTimeAgo(notif.timestamp));
 
             content.append(msg, time);
+
+            if (notif.type === 'save_spot_request' && notif.requestId) {
+                var reqId = notif.requestId;
+                var actionsDiv = $('<div class="notification-spot-actions mt-2 d-flex flex-wrap align-items-center" data-request-id="' + reqId + '"></div>');
+
+                var cachedData = that.spotRequestData[reqId];
+                if (cachedData && cachedData.status === 'taken') {
+                    var takenBtn = $('<button type="button" class="btn btn-sm btn-secondary btn-spot-taken disabled" disabled data-action="spot-taken">' +
+                        '<i class="fas fa-check-circle ml-1"></i> Spot taken!' +
+                        '</button>');
+                    actionsDiv.append(takenBtn);
+                } else {
+                    var saveBtn = $('<button type="button" class="btn btn-sm btn-success btn-save-spot mr-2" data-action="saved-spot">' +
+                        '<i class="fas fa-check ml-1"></i> I\'ve saved a spot' +
+                        '</button>');
+
+                    var cancelBtn = $('<button type="button" class="btn btn-sm btn-outline-secondary btn-cancel-spot" data-action="cancel-spot">' +
+                        '<i class="fas fa-times ml-1"></i> Cancel' +
+                        '</button>');
+
+                    saveBtn.click(function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        saveBtn.prop('disabled', true).addClass('disabled').html('<i class="fas fa-spinner fa-spin ml-1"></i> Saving...');
+                        cancelBtn.prop('disabled', true).addClass('disabled');
+                        that.respondToSpotRequest(notif, reqId, 'taken', saveBtn, cancelBtn);
+                    });
+
+                    cancelBtn.click(function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        that.respondToSpotRequest(notif, reqId, 'cancelled', saveBtn, cancelBtn);
+                    });
+
+                    actionsDiv.append(saveBtn, cancelBtn);
+                }
+
+                content.append(actionsDiv);
+
+                if (!that.spotRequestListeners[reqId] && that.firestoreDb) {
+                    that.spotRequestListeners[reqId] = that.firestoreDb.collection('spotRequests').doc(reqId)
+                        .onSnapshot(function (docSnap) {
+                            if (docSnap.exists) {
+                                var spotData = docSnap.data();
+                                that.spotRequestData[reqId] = spotData;
+                                that.updateSpotRequestUI(reqId, spotData);
+                            }
+                        }, function (err) {
+                            console.warn('Error listening to spotRequest ' + reqId + ':', err);
+                        });
+                }
+            }
             item.append(icon, content);
 
             if (!notif.read) {

@@ -9,6 +9,7 @@ var CourseCalendar = (function () {
         this.courseManager = options.courseManager;
         this.colorGenerator = options.colorGenerator;
         this.readonly = options.readonly;
+        this.firestoreDb = options.firestoreDb || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
         this.onCourseHoverIn = options.onCourseHoverIn;
         this.onCourseHoverOut = options.onCourseHoverOut;
         this.onCourseConflictedStatusChanged = options.onCourseConflictedStatusChanged;
@@ -906,9 +907,18 @@ var CourseCalendar = (function () {
         }
         modalContent.append(detailsBox);
 
+        // Save a spot for me button
+        var saveSpotBox = $('<div class="event-friends-save-spot-box mb-3"></div>');
+        var saveSpotBtn = $('<button type="button" class="btn btn-primary btn-block btn-save-spot-request d-flex align-items-center justify-content-center py-2 font-weight-bold" data-action="save-spot-for-me">' +
+            '<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>' +
+            '</button>');
+        saveSpotBox.append(saveSpotBtn);
+        modalContent.append(saveSpotBox);
+
         // Friends list
         var friends = (eventFriendData && eventFriendData.friends) || [];
         if (friends.length === 0) {
+            saveSpotBtn.prop('disabled', true).addClass('disabled').attr('title', 'אין חברים באירוע זה');
             modalContent.append($('<div class="event-friends-empty text-center py-3">אין חברים באירוע זה.</div>'));
         } else {
             var friendsList = $('<div class="list-group"></div>');
@@ -952,6 +962,99 @@ var CourseCalendar = (function () {
             });
             modalContent.append(friendsList);
         }
+
+        saveSpotBtn.click(function () {
+            var currentUser = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser : null;
+            if (!currentUser) {
+                alert('יש להתחבר כדי לשלוח בקשת שמירת מקום.');
+                return;
+            }
+
+            var recipientFriends = friends.filter(function (f) {
+                return f.uid && f.uid !== currentUser.uid;
+            });
+
+            if (recipientFriends.length === 0) {
+                alert('אין חברים ברשימה זו שניתן לשלוח להם בקשה.');
+                return;
+            }
+
+            saveSpotBtn.prop('disabled', true).addClass('disabled')
+                .html('<i class="fas fa-spinner fa-spin ml-2"></i> <span>שולח...</span>');
+
+            var eventDetails = parts.join(' | ');
+            var senderName = (typeof personalArea !== 'undefined' && personalArea && personalArea.getCurrentUsername) ?
+                personalArea.getCurrentUsername() :
+                (currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'חבר'));
+
+            var notifMessage = senderName + ': "Save a spot for me!" ב-' + courseTitle + (eventDetails ? ' (' + eventDetails + ')' : '');
+
+            var db = courseCalendar.firestoreDb || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            if (!db) {
+                alert('שגיאת התחברות למסד הנתונים');
+                saveSpotBtn.prop('disabled', false).removeClass('disabled')
+                    .html('<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>');
+                return;
+            }
+
+            var recipientUids = recipientFriends.map(function (f) { return f.uid; });
+            var spotRequestRef = db.collection('spotRequests').doc();
+            var spotRequestId = spotRequestRef.id;
+
+            var spotRequestData = {
+                requestId: spotRequestId,
+                requesterUid: currentUser.uid,
+                requesterUsername: senderName,
+                courseNumber: courseNumber || '',
+                courseTitle: courseTitle || '',
+                eventDetails: eventDetails || '',
+                lessonType: (event.lessonData && courseCalendar.courseManager) ? (courseCalendar.courseManager.getLessonType(event.lessonData) || '') : '',
+                lessonNum: (event.lessonData && event.lessonData['מס.']) ? String(event.lessonData['מס.']) : '',
+                recipients: recipientUids,
+                status: 'pending',
+                savedByUid: null,
+                savedByUsername: null,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+
+            spotRequestRef.set(spotRequestData).then(function () {
+                var notifPromises = recipientUids.map(function (targetUid) {
+                    var notifRef = db.collection('users').doc(targetUid).collection('notifications').doc();
+                    var notifData = {
+                        type: 'save_spot_request',
+                        fromUid: currentUser.uid,
+                        fromUsername: senderName,
+                        message: notifMessage,
+                        timestamp: Date.now(),
+                        read: false,
+                        requestId: spotRequestId
+                    };
+                    return notifRef.set(notifData).then(function () {
+                        if (typeof NotificationsManager !== 'undefined' && NotificationsManager.sendPush) {
+                            return NotificationsManager.sendPush(targetUid, {
+                                title: 'CheeseMate - Save a spot for me!',
+                                body: notifMessage,
+                                icon: '/icons/android-chrome-192x192.png',
+                                badge: '/icons/favicon-32x32.png',
+                                url: '/?tab=friends',
+                                tag: spotRequestId
+                            });
+                        }
+                    });
+                });
+
+                return Promise.all(notifPromises);
+            }).then(function () {
+                saveSpotBtn.removeClass('btn-primary').addClass('btn-success')
+                    .html('<i class="fas fa-check ml-2"></i> <span>בקשה נשלחה!</span>');
+            }).catch(function (err) {
+                console.error('Error sending save a spot request:', err);
+                alert('שגיאה בשליחת הבקשה: ' + (err.message || err));
+                saveSpotBtn.prop('disabled', false).removeClass('disabled')
+                    .html('<i class="fas fa-chair ml-2"></i> <span>Save a spot for me!</span>');
+            });
+        });
 
         BootstrapDialog.show({
             title: $('<span class="d-flex align-items-center"><i class="fas fa-heart text-danger ml-2"></i> חברים באירוע זה (' + friends.length + ')</span>'),

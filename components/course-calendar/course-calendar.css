@@ -190,3 +190,10 @@
 .event-friends-empty {
     color: #6c757d;
 }
+
+/* Save a spot request button */
+.event-friends-save-spot-box .btn-save-spot-request {
+    font-size: 0.95rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease-in-out;
+}

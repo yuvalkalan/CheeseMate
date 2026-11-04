@@ -82,3 +82,20 @@
     font-size: 0.9rem;
     color: #6c757d;
 }
+
+/* Spot request actions */
+.notification-spot-actions {
+    gap: 6px;
+}
+
+.notification-spot-actions .btn {
+    font-size: 0.78rem;
+    padding: 3px 8px;
+    font-weight: 500;
+}
+
+.notification-spot-actions .btn-spot-taken {
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.85;
+}
