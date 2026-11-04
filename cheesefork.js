@@ -976,6 +976,9 @@
         firebase.initializeApp(config);
 
         firestoreDb = firebase.firestore();
+        if (courseCalendar) {
+            courseCalendar.firestoreDb = firestoreDb;
+        }
 
         firebaseStorage = firebase.app().storage();
 

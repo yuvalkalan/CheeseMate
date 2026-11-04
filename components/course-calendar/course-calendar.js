@@ -9,7 +9,7 @@ var CourseCalendar = (function () {
         this.courseManager = options.courseManager;
         this.colorGenerator = options.colorGenerator;
         this.readonly = options.readonly;
-        this.firestoreDb = options.firestoreDb || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+        this.firestoreDb = options.firestoreDb || null;
         this.onCourseHoverIn = options.onCourseHoverIn;
         this.onCourseHoverOut = options.onCourseHoverOut;
         this.onCourseConflictedStatusChanged = options.onCourseConflictedStatusChanged;
@@ -989,7 +989,7 @@ var CourseCalendar = (function () {
 
             var notifMessage = senderName + ': "Save a spot for me!" ב-' + courseTitle + (eventDetails ? ' (' + eventDetails + ')' : '');
 
-            var db = courseCalendar.firestoreDb || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            var db = courseCalendar.getFirestoreDb ? courseCalendar.getFirestoreDb() : (courseCalendar.firestoreDb || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && firebase.firestore ? firebase.firestore() : null));
             if (!db) {
                 alert('שגיאת התחברות למסד הנתונים');
                 saveSpotBtn.prop('disabled', false).removeClass('disabled')
@@ -1509,6 +1509,17 @@ var CourseCalendar = (function () {
             }
         });
         that.element.fullCalendar('rerenderEvents');
+    };
+
+    CourseCalendar.prototype.getFirestoreDb = function () {
+        if (this.firestoreDb) {
+            return this.firestoreDb;
+        }
+        if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && typeof firebase.firestore === 'function') {
+            this.firestoreDb = firebase.firestore();
+            return this.firestoreDb;
+        }
+        return null;
     };
 
     return CourseCalendar;
