@@ -11,6 +11,22 @@
     cursor: pointer;
 }
 
+/* System Administrator / מנהל מערכת Badge */
+.badge-role-system-god {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 1px 4px rgba(217, 119, 6, 0.45);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.badge-role-system-god:hover {
+    color: #ffffff !important;
+    opacity: 0.95;
+}
+
+/* Atmosphere Badge */
 .badge-role-atmosphere {
     background-color: #dc3545 !important;
     color: #ffffff !important;
@@ -21,6 +37,31 @@
 .badge-role-atmosphere:hover {
     color: #ffffff !important;
     opacity: 0.95;
+}
+
+/* Custom Role Badge */
+.badge-role-custom {
+    background-color: #4f46e5;
+    color: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+}
+
+/* Standard User Badge */
+.badge-role-user {
+    background-color: #6c757d;
+    color: #ffffff;
+}
+
+/* Golden gradient for System Administrator (מנהל מערכת) */
+.admin-golden-gradient {
+    background: linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    color: #d4af37 !important;
+    display: inline-block;
+    font-weight: 700;
 }
 
 /* Red gradient for "א. אווירה" names */
@@ -35,6 +76,33 @@
 }
 
 @media (prefers-color-scheme: dark) {
+    .admin-golden-gradient {
+        background: linear-gradient(135deg, #ffd700 0%, #ffe680 25%, #e6a817 50%, #fff2a8 75%, #cca010 100%) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+        color: #ffd700 !important;
+    }
+
+    .badge-role-system-god {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        box-shadow: 0 1px 5px rgba(245, 158, 11, 0.5) !important;
+    }
+
+    .badge-role-custom {
+        background-color: #6366f1 !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0 1px 4px rgba(99, 102, 241, 0.45) !important;
+    }
+
+    .badge-role-user {
+        background-color: #4b5563 !important;
+        color: #e5e7eb !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
     .role-atmosphere-gradient {
         background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 35%, #ff7979 70%, #ee5253 100%) !important;
         -webkit-background-clip: text !important;
@@ -50,4 +118,3 @@
         box-shadow: 0 1px 4px rgba(230, 57, 70, 0.5) !important;
     }
 }
-

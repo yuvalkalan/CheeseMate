@@ -8,8 +8,8 @@
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="stylesheet" href="/modules/bootstrap-rtl/css/bootstrap.min.css">
     <link rel="stylesheet" href="/modules/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="/components/roles/roles.css?v=3">
-    <link rel="stylesheet" href="/admin/admin.css?v=7">
+    <link rel="stylesheet" href="/components/roles/roles.css?v=5">
+    <link rel="stylesheet" href="/admin/admin.css?v=9">
 </head>
 <body>
 
@@ -28,7 +28,7 @@
 
                 <div id="admin-user-profile" class="d-none align-items-center">
                     <span id="admin-user-name" class="font-weight-bold text-truncate mx-2 admin-golden-gradient" style="max-width: 180px;"></span>
-                    <span class="badge badge-danger mr-2">Administrator</span>
+                    <span id="admin-user-role-badge" class="badge badge-role-system-god mr-2">מנהל מערכת</span>
                     <button id="admin-logout-btn" class="btn btn-outline-danger btn-sm" title="התנתקות">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
@@ -111,122 +111,199 @@
         <!-- 4. State: Authorized Administrator Dashboard -->
         <div id="admin-dashboard-state" class="d-none">
 
-            <!-- Stats Overview Cards -->
-            <div class="row mb-4">
-                <div class="col-xl-4 col-md-6 mb-4">
-                    <div class="card stat-card stat-card-total h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="stat-label text-primary">סה״כ משתמשים רשומים</div>
-                                    <div class="stat-value" id="stat-total-users">0</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-users stat-icon text-primary"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-4 col-md-6 mb-4">
-                    <div class="card stat-card stat-card-admins h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="stat-label text-danger">מנהלי מערכת (רמה 1 - admin)</div>
-                                    <div class="stat-value" id="stat-admin-users">0</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-user-shield stat-icon text-danger"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-4 col-md-6 mb-4">
-                    <div class="card stat-card stat-card-users h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="stat-label text-success">משתמשים רגילים (רמה 0 - user)</div>
-                                    <div class="stat-value" id="stat-regular-users">0</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-user-check stat-icon text-success"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Users Management Table Card -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 card-header-actions">
-                    <h5 class="m-0 font-weight-bold text-primary">
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-pills admin-nav-tabs mb-4" id="adminTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active font-weight-bold" id="tab-users-nav" data-toggle="pill" href="#tab-users-pane" role="tab" aria-controls="tab-users-pane" aria-selected="true">
                         <i class="fas fa-users-cog ml-2"></i> ניהול משתמשים
-                    </h5>
-                    <div class="d-flex align-items-center flex-wrap gap-2">
-                        <button id="admin-open-notify-modal-btn" class="btn btn-warning btn-sm font-weight-bold ml-2 text-dark shadow-sm" title="שליחת הודעת מערכת למשתמשים">
-                            <i class="fas fa-bullhorn ml-1"></i> שליחת הודעת מערכת
-                        </button>
-                        <a href="https://console.firebase.google.com/project/cheesemate-yk/authentication/users" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ml-2" title="פתיחת מסוף משתמשי Firebase Authentication">
-                            <i class="fas fa-external-link-alt ml-1"></i> מסוף Firebase Auth
-                        </a>
-                        <button id="admin-refresh-users-btn" class="btn btn-outline-secondary btn-sm" title="רענן נתונים">
-                            <i class="fas fa-sync-alt ml-1"></i> רענן
-                        </button>
-                    </div>
-                </div>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link font-weight-bold" id="tab-roles-nav" data-toggle="pill" href="#tab-roles-pane" role="tab" aria-controls="tab-roles-pane" aria-selected="false">
+                        <i class="fas fa-shield-alt ml-2"></i> ניהול רמות הרשאה
+                        <span class="badge badge-light border mr-1 font-weight-normal" id="stat-total-roles">2</span>
+                    </a>
+                </li>
+            </ul>
 
-                <div class="card-body">
-                    <!-- Filters & Search Toolbar -->
-                    <div class="row mb-3">
-                        <div class="col-md-7 col-lg-8 mb-2">
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <div class="tab-content" id="adminTabsContent">
+
+                <!-- Tab 1: Users Management -->
+                <div class="tab-pane fade show active" id="tab-users-pane" role="tabpanel" aria-labelledby="tab-users-nav">
+
+                    <!-- Stats Overview Cards -->
+                    <div class="row mb-4">
+                        <div class="col-xl-4 col-md-6 mb-4">
+                            <div class="card stat-card stat-card-total h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="stat-label text-primary">סה״כ משתמשים רשומים</div>
+                                            <div class="stat-value" id="stat-total-users">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-users stat-icon text-primary"></i>
+                                        </div>
+                                    </div>
                                 </div>
-                                <input type="text" id="admin-search-input" class="form-control" placeholder="חיפוש לפי שם משתמש, דוא״ל או מזהה UID...">
                             </div>
                         </div>
-                        <div class="col-md-5 col-lg-4 mb-2">
-                            <select id="admin-role-filter" class="custom-select">
-                                <option value="all">כל רמות ההרשאה</option>
-                                <option value="1">רמה 1 - מנהל (admin)</option>
-                                <option value="2">רמה 2 - א. אווירה (atmosphere)</option>
-                                <option value="0">רמה 0 - משתמש (user)</option>
-                            </select>
+
+                        <div class="col-xl-4 col-md-6 mb-4">
+                            <div class="card stat-card stat-card-admins h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="stat-label text-warning">מנהלי מערכת (דרגה 1)</div>
+                                            <div class="stat-value" id="stat-admin-users">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-crown stat-icon text-warning"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-4 col-md-6 mb-4">
+                            <div class="card stat-card stat-card-users h-100 py-2">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="stat-label text-success">משתמשים רגילים (User)</div>
+                                            <div class="stat-value" id="stat-regular-users">0</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-user-check stat-icon text-success"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Users Table -->
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" id="admin-users-table">
-                            <thead>
-                                <tr>
-                                    <th>משתמש</th>
-                                    <th>דוא״ל</th>
-                                    <th>מזהה משתמש (UID)</th>
-                                    <th>רמת הרשאה (Level)</th>
-                                    <th>חברים</th>
-                                    <th>נראה לאחרונה</th>
-                                    <th class="text-center">פעולות</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-users-tbody">
-                                <!-- Populated dynamically by admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
+                    <!-- Users Management Table Card -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3 card-header-actions">
+                            <h5 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-users-cog ml-2"></i> ניהול משתמשים
+                            </h5>
+                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                <button id="admin-open-notify-modal-btn" class="btn btn-warning btn-sm font-weight-bold ml-2 text-dark shadow-sm" title="שליחת הודעת מערכת למשתמשים">
+                                    <i class="fas fa-bullhorn ml-1"></i> שליחת הודעת מערכת
+                                </button>
+                                <a href="https://console.firebase.google.com/project/cheesemate-yk/authentication/users" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ml-2" title="פתיחת מסוף משתמשי Firebase Authentication">
+                                    <i class="fas fa-external-link-alt ml-1"></i> מסוף Firebase Auth
+                                </a>
+                                <button id="admin-refresh-users-btn" class="btn btn-outline-secondary btn-sm" title="רענן נתונים">
+                                    <i class="fas fa-sync-alt ml-1"></i> רענן
+                                </button>
+                            </div>
+                        </div>
 
-                    <div id="admin-no-users" class="text-center py-5 text-muted d-none">
-                        <i class="fas fa-search fa-2x mb-2 d-block"></i>
-                        לא נמצאו משתמשים התואמים את החיפוש
+                        <div class="card-body">
+                            <!-- Filters & Search Toolbar -->
+                            <div class="row mb-3">
+                                <div class="col-md-7 col-lg-8 mb-2">
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        </div>
+                                        <input type="text" id="admin-search-input" class="form-control" placeholder="חיפוש לפי שם משתמש, דוא״ל או מזהה UID...">
+                                    </div>
+                                </div>
+                                <div class="col-md-5 col-lg-4 mb-2">
+                                    <select id="admin-role-filter" class="custom-select">
+                                        <option value="all">כל רמות ההרשאה</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Users Table -->
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" id="admin-users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>משתמש</th>
+                                            <th>דוא״ל</th>
+                                            <th>מזהה משתמש (UID)</th>
+                                            <th>רמת הרשאה (Level)</th>
+                                            <th>חברים</th>
+                                            <th>נראה לאחרונה</th>
+                                            <th class="text-center">פעולות</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-users-tbody">
+                                        <!-- Populated dynamically by admin.js -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div id="admin-no-users" class="text-center py-5 text-muted d-none">
+                                <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                                לא נמצאו משתמשים התואמים את החיפוש
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Tab 2: Permission Levels Management -->
+                <div class="tab-pane fade" id="tab-roles-pane" role="tabpanel" aria-labelledby="tab-roles-nav">
+
+                    <!-- Info Alert -->
+                    <div class="alert alert-light border shadow-sm mb-4">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-shield-alt fa-2x text-primary ml-3 mt-1"></i>
+                            <div>
+                                <h6 class="font-weight-bold mb-1 text-primary">מדרג רמות ההרשאה של CheeseMate</h6>
+                                <p class="small text-muted mb-0">
+                                    <strong>"מנהל מערכת" (רמה 1)</strong> הינה הרמה הגבוהה ביותר במערכת ומוגדרת ישירות במערכת. רמה זו מעניקה גישה מלאה ללוח הניהול, יצירה/עריכה/מחיקה של דרגות הרשאה, שינוי דרגות משתמשים, שליחת הודעות מערכת ומחיקת משתמשים.<br>
+                                    <strong>"User" (רמה 0)</strong> הינה רמת הבסיס הרגילה. ניתן להגדיר דרגות נוספות עם מזהה סידורי ייחודי, שם מערכת שיוצג בריחוף עכבר, ביטוי צבע זיהוי ייחודי, הורשת סמכויות והרשאות לפעולות ספציפיות.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Roles Management Card -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3 card-header-actions">
+                            <h5 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-layer-group ml-2"></i> רמות הרשאה במערכת
+                            </h5>
+                            <div>
+                                <button id="admin-add-role-btn" class="btn btn-success btn-sm font-weight-bold shadow-sm" title="הוסף רמת הרשאה חדשה">
+                                    <i class="fas fa-plus ml-1"></i> הוסף רמת הרשאה חדשה
+                                </button>
+                                <button id="admin-refresh-roles-btn" class="btn btn-outline-secondary btn-sm mr-2" title="רענן רמות הרשאה">
+                                    <i class="fas fa-sync-alt ml-1"></i> רענן
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" id="admin-roles-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 100px;">מזהה סידורי</th>
+                                            <th>שם</th>
+                                            <th>צבע זיהוי</th>
+                                            <th>הורשת סמכויות</th>
+                                            <th>הרשאות פעולה</th>
+                                            <th>משתמשים משויכים</th>
+                                            <th>סטטוס</th>
+                                            <th class="text-center" style="width: 140px;">פעולות</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-roles-tbody">
+                                        <!-- Populated dynamically by admin.js -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -408,6 +485,134 @@
         </div>
     </div>
 
+    <!-- Add / Edit Permission Level Modal -->
+    <div class="modal fade" id="editRoleModal" tabindex="-1" role="dialog" aria-labelledby="editRoleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title font-weight-bold" id="editRoleModalLabel">
+                        <i class="fas fa-shield-alt ml-2"></i> <span id="editRoleModalTitleText">הוספת רמת הרשאה חדשה</span>
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="admin-role-form">
+                    <div class="modal-body">
+
+                        <!-- Serial ID & Role Name -->
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="role-input-id" class="font-weight-bold small">מזהה סידורי (Serial ID):</label>
+                                <input type="number" class="form-control font-weight-bold bg-light" id="role-input-id" readonly>
+                                <small class="form-text text-muted">מזהה ייחודי הנוצר אוטומטית.</small>
+                            </div>
+                            <div class="form-group col-md-8">
+                                <label for="role-input-name" class="font-weight-bold small">שם רמת ההרשאה (Name): <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="role-input-name" required placeholder="לדוגמה: אחראי תוכן / Moderator" maxlength="100">
+                                <small class="form-text text-muted">מוצג כאשר מרחפים עם העכבר מעל שמו של משתמש ברמה זו.</small>
+                            </div>
+                        </div>
+
+                        <!-- Identification Color Expression -->
+                        <div class="form-group">
+                            <label for="role-input-color" class="font-weight-bold small">צבע זיהוי (Color Expression):</label>
+                            <div class="input-group mb-2">
+                                <div class="input-group-prepend">
+                                    <input type="color" id="role-color-picker" class="form-control" style="width: 45px; height: 38px; padding: 2px; cursor: pointer;" title="בחר צבע מהלוח">
+                                </div>
+                                <input type="text" class="form-control font-monospace" id="role-input-color" placeholder="#e74a3b או linear-gradient(135deg, ...)" maxlength="500">
+                            </div>
+                            <div class="mb-2">
+                                <span class="small font-weight-bold text-muted ml-2">ערכות צבע מוכנות:</span>
+                                <span class="color-preset-pill" style="background: linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%);" data-preset="linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%)">זהב (Golden)</span>
+                                <span class="color-preset-pill" style="background: linear-gradient(135deg, #c02424 0%, #e83e8c 25%, #dc3545 50%, #f85032 75%, #b31217 100%);" data-preset="linear-gradient(135deg, #c02424 0%, #e83e8c 25%, #dc3545 50%, #f85032 75%, #b31217 100%)">אדום להבה</span>
+                                <span class="color-preset-pill" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #1d4ed8 100%);" data-preset="linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #1d4ed8 100%)">כחול מלכותי</span>
+                                <span class="color-preset-pill" style="background: linear-gradient(135deg, #059669 0%, #10b981 50%, #047857 100%);" data-preset="linear-gradient(135deg, #059669 0%, #10b981 50%, #047857 100%)">ירוק אמרלד</span>
+                                <span class="color-preset-pill" style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #6d28d9 100%);" data-preset="linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #6d28d9 100%)">סגול ניאון</span>
+                                <span class="color-preset-pill" style="background: #e11d48;" data-preset="#e11d48">ארגמן</span>
+                                <span class="color-preset-pill" style="background: #0284c7;" data-preset="#0284c7">תכלת</span>
+                                <span class="color-preset-pill" style="background: #64748b;" data-preset="">ברירת מחדל (ללא צבע)</span>
+                            </div>
+
+                            <!-- Live Hover & Color Preview Box -->
+                            <div class="role-preview-card mt-2">
+                                <span class="small font-weight-bold text-muted d-block mb-1">
+                                    <i class="fas fa-eye ml-1 text-primary"></i> תצוגה מקדימה בריחוף (העבר את העכבר מעל השם כדי לראות את שם המערכת):
+                                </span>
+                                <div class="p-2 border rounded bg-white text-center">
+                                    <span id="role-live-preview-user" class="font-weight-bold" style="font-size: 1.15rem; cursor: help;">ישראל ישראלי</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Inheritance Selection -->
+                        <div class="form-group">
+                            <label class="font-weight-bold small d-block mb-1">
+                                <i class="fas fa-sitemap ml-1 text-info"></i> הורשת סמכויות מרמות אחרות:
+                            </label>
+                            <small class="form-text text-muted mb-2">הורשה מעניקה אוטומטית גישה לכל הסמכויות וההרשאות של הרמה המורשת (לא ניתן להוריש ממנהל מערכת).</small>
+                            <div id="role-inherits-container" class="border rounded p-2 bg-light" style="max-height: 150px; overflow-y: auto;">
+                                <!-- Populated dynamically by admin.js -->
+                            </div>
+                        </div>
+
+                        <!-- Specific Action Permissions -->
+                        <div class="form-group mb-0">
+                            <label class="font-weight-bold small d-block mb-1">
+                                <i class="fas fa-key ml-1 text-warning"></i> הרשאות לפעולות ספציפיות במערכת:
+                            </label>
+                            <div id="role-permissions-checklist" class="border rounded p-3 bg-white">
+                                <!-- Populated dynamically with checkboxes -->
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">ביטול</button>
+                        <button type="submit" class="btn btn-primary font-weight-bold" id="save-role-btn">
+                            <i class="fas fa-save ml-1"></i> שמור רמת הרשאה
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Role Confirmation Modal -->
+    <div class="modal fade" id="deleteRoleModal" tabindex="-1" role="dialog" aria-labelledby="deleteRoleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title font-weight-bold" id="deleteRoleModalLabel">
+                        <i class="fas fa-exclamation-triangle ml-2"></i> מחיקת רמת הרשאה
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="font-weight-bold">האם אתה בטוח שברצונך למחוק את רמת ההרשאה הבאה?</p>
+                    <div class="alert alert-light border">
+                        <div><strong>מזהה סידורי:</strong> <span id="delete-role-modal-id" class="badge badge-secondary"></span></div>
+                        <div><strong>שם:</strong> <span id="delete-role-modal-name" class="font-weight-bold"></span></div>
+                        <div><strong>משתמשים משויכים:</strong> <span id="delete-role-modal-count" class="badge badge-primary"></span></div>
+                        <div id="delete-role-inheritors-row" class="d-none"><strong>רמות הרשאה היורשות מרמה זו:</strong> <span id="delete-role-modal-inheritors" class="badge badge-info"></span></div>
+                    </div>
+                    <div class="alert alert-warning small mb-0 py-2">
+                        <i class="fas fa-info-circle ml-1"></i> משתמשים המשויכים כעת לרמה זו יועברו אוטומטית לרמת הרשאה <strong>0 (משתמש רגיל - User)</strong>, וההורשה מרמה זו תוסר אוטומטית מכל רמות ההרשאה התלויות בה. לא ניתן לבטל פעולה זו!
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">ביטול</button>
+                    <button type="button" class="btn btn-danger font-weight-bold" id="confirm-delete-role-btn">
+                        <i class="fas fa-trash-alt ml-1"></i> מחק רמת הרשאה
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="/modules/fullcalendar/lib/jquery.min.js"></script>
     <script src="/modules/popper/popper.js"></script>
@@ -416,7 +621,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore-compat.js"></script>
     <script src="/components/notifications/notifications.js?v=21"></script>
-    <script src="/components/roles/roles.js?v=3"></script>
-    <script src="/admin/admin.js?v=9"></script>
+    <script src="/components/roles/roles.js?v=10"></script>
+    <script src="/admin/admin.js?v=17"></script>
 </body>
 </html>

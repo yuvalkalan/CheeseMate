@@ -5,98 +5,165 @@
 /**
  * CheeseMate Modular Role and Permission System
  *
- * Provides a centralized registry and utilities for user permission levels,
- * role descriptions, and UI presentation (tooltips on hover, gradient colors, badges).
- *
- * New roles can be registered modularly via:
- *   RoleManager.registerRole({ level: 2, name: 'moderator', description: 'אחראי תוכן' });
- * Or loaded dynamically from Firestore's 'permissionLevels' collection:
- *   RoleManager.loadFromFirestore(db);
+ * Permission Hierarchy:
+ * - "מנהל מערכת" (Level 1): Highest level in the system. Built-in default with full access
+ *   (access admin panel, create/edit/delete permission levels, modify users' permission levels,
+ *   send system messages, delete users).
+ * - "User" (Level 0): Lowest level in the system. Built-in default standard user.
+ * - Custom Levels: Dynamically created and managed via the Admin Panel, stored in Firestore 'permissionLevels'.
+ *   Each level includes:
+ *     1. Unique serial ID (numeric, auto-generated)
+ *     2. Name (displayed on mouse hover over user names)
+ *     3. Identification color (color or gradient expression defining user's display color)
+ *     4. Inheritance from other permission levels (inheriting all capabilities)
+ *     5. Specific action permissions (access_admin, send_system_messages, modify_user_roles, manage_roles, delete_users)
  */
 var RoleManager = (function () {
-    // Registry of permission levels: numeric level -> role definition
+    var SYSTEM_GOD_LEVEL = 1;
+    var USER_LEVEL = 0;
+
+    // Available specific action permissions across the system
+    var AVAILABLE_PERMISSIONS = [
+        { id: 'access_admin', label: 'גישה ללוח הניהול (Access Admin Panel)', description: 'הרשאה לפתוח ולצפות בלוח הניהול של CheeseMate' },
+        { id: 'send_system_messages', label: 'שליחת הודעות מערכת (Send System Notifications)', description: 'הרשאה לשדר הודעות מערכת והתראות Push לכל המשתמשים או למשתמשים נבחרים' },
+        { id: 'modify_user_roles', label: 'שינוי דרגות משתמשים (Modify Users\' Permission Levels)', description: 'הרשאה לערוך ולשנות רמת הרשאה של משתמשים קיימים' },
+        { id: 'manage_roles', label: 'ניהול רמות הרשאה (Manage Permission Levels)', description: 'הרשאה ליצור, לערוך ולמחוק רמות הרשאה במערכת' },
+        { id: 'delete_users', label: 'מחיקת משתמשים (Delete Users)', description: 'הרשאה למחוק משתמשים ונתוניהם לצמיתות מלוח הניהול' }
+    ];
+
+    // Registry of permission levels. ONLY מנהל מערכת and User are defined directly within the system.
     var rolesMap = {
         0: {
-            level: 0,
-            name: 'user',
-            description: 'משתמש רגיל',
+            level: USER_LEVEL,
+            name: 'User',
+            color: '',
             isStandard: true,
+            isSystemGod: false,
             badgeClass: 'badge-role-user',
             gradientClass: null,
-            hasNameTag: false,
-            nameTagText: ''
+            inheritsFrom: [],
+            permissions: []
         },
         1: {
-            level: 1,
-            name: 'admin',
-            description: 'מנהל מערכת',
+            level: SYSTEM_GOD_LEVEL,
+            name: 'מנהל מערכת',
+            color: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
             isStandard: false,
-            badgeClass: 'badge-role-admin',
+            isSystemGod: true,
+            badgeClass: 'badge-role-system-god',
             gradientClass: 'admin-golden-gradient',
-            hasNameTag: false,
-            nameTagText: ''
-        },
-        2: {
-            level: 2,
-            name: 'atmosphere',
-            description: 'א. אווירה',
-            isStandard: false,
-            badgeClass: 'badge-role-atmosphere',
-            gradientClass: 'role-atmosphere-gradient',
-            hasNameTag: false,
-            nameTagText: ''
+            inheritsFrom: [],
+            permissions: [
+                'access_admin',
+                'send_system_messages',
+                'modify_user_roles',
+                'manage_roles',
+                'delete_users'
+            ]
         }
     };
 
     // Mapping from lowercase role slug/alias to numeric level
     var roleNamesMap = {
-        'user': 0,
-        'regular': 0,
-        'standard': 0,
-        'admin': 1,
-        'administrator': 1,
-        'atmosphere': 2,
-        'vibe': 2,
-        'א. אווירה': 2,
-        'אחראי אווירה': 2
+        'user': USER_LEVEL,
+        'regular': USER_LEVEL,
+        'standard': USER_LEVEL,
+        'משתמש': USER_LEVEL,
+        'מנהל מערכת': SYSTEM_GOD_LEVEL,
+        'מנהל': SYSTEM_GOD_LEVEL,
+        'system god': SYSTEM_GOD_LEVEL,
+        'systemgod': SYSTEM_GOD_LEVEL,
+        'god': SYSTEM_GOD_LEVEL,
+        'אל המערכת': SYSTEM_GOD_LEVEL,
+        'admin': SYSTEM_GOD_LEVEL,
+        'administrator': SYSTEM_GOD_LEVEL
     };
 
     /**
      * Registers or updates a role in the modular registry.
      * @param {Object} role - Role definition.
-     * @param {number} role.level - Numeric permission level identifier.
-     * @param {string} [role.name] - Internal name/slug.
-     * @param {string} [role.description] - Human-readable permission/role description.
-     * @param {boolean} [role.isStandard] - Whether this role represents a standard user (defaults to level === 0).
-     * @param {string} [role.badgeClass] - CSS badge class.
-     * @param {string} [role.gradientClass] - CSS gradient class for name styling.
      */
     function registerRole(role) {
         if (!role || typeof role.level !== 'number' || isNaN(role.level)) {
             return;
         }
         var lvl = role.level;
-        var isStandard = (typeof role.isStandard === 'boolean') ? role.isStandard : (lvl === 0);
-        var hasNameTag = Boolean(role.hasNameTag);
-        var nameTagText = role.nameTagText || '';
+        var isSystemGod = (lvl === SYSTEM_GOD_LEVEL) || Boolean(role.isSystemGod);
+        var isStandard = (lvl === USER_LEVEL) || (typeof role.isStandard === 'boolean' ? role.isStandard : false);
+
+        var name = role.name || role.systemName || (isSystemGod ? 'מנהל מערכת' : (isStandard ? 'User' : 'role_' + lvl));
+
+        var color = (typeof role.color === 'string') ? role.color.trim() : '';
+        if (!color && isSystemGod) {
+            color = 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)';
+        }
+
+        var inheritsFrom = Array.isArray(role.inheritsFrom)
+            ? role.inheritsFrom.map(function (n) { return parseInt(n, 10); }).filter(function (n) {
+                return !isNaN(n) && n !== lvl && n !== SYSTEM_GOD_LEVEL && !wouldCreateCycle(lvl, n);
+            })
+            : [];
+
+        var permissions = isSystemGod
+            ? ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users']
+            : (Array.isArray(role.permissions)
+                ? role.permissions.filter(function (p) {
+                    var k = typeof p === 'string' ? p.trim() : (p && p.id ? String(p.id).trim() : '');
+                    return k && k !== 'undefined';
+                })
+                : []);
+
+        var badgeClass = role.badgeClass || (isSystemGod ? 'badge-role-system-god' : (isStandard ? 'badge-role-user' : 'badge-role-custom'));
+        var gradientClass = role.gradientClass !== undefined ? role.gradientClass : (isSystemGod ? 'admin-golden-gradient' : null);
 
         rolesMap[lvl] = {
             level: lvl,
-            name: role.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'role_' + lvl))),
-            description: role.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'דרגה ' + lvl))),
+            name: name,
+            color: color,
+            inheritsFrom: inheritsFrom,
+            permissions: permissions,
             isStandard: isStandard,
-            badgeClass: role.badgeClass || (isStandard ? 'badge-role-user' : (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-custom'))),
-            gradientClass: role.gradientClass !== undefined ? role.gradientClass : (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null)),
-            hasNameTag: hasNameTag,
-            nameTagText: nameTagText
+            isSystemGod: isSystemGod,
+            badgeClass: badgeClass,
+            gradientClass: gradientClass
         };
 
-        if (role.name) {
-            roleNamesMap[String(role.name).toLowerCase().trim()] = lvl;
+        if (name) {
+            roleNamesMap[String(name).toLowerCase().trim()] = lvl;
         }
-        if (role.description) {
-            roleNamesMap[String(role.description).toLowerCase().trim()] = lvl;
+    }
+
+    /**
+     * Removes a role from the registry and cascade-removes its level from any other role's inheritsFrom list.
+     * @param {number|string} userOrLevel
+     * @returns {boolean} True if a role was removed
+     */
+    function removeRole(userOrLevel) {
+        var lvl = resolveLevel(userOrLevel);
+        if (lvl === SYSTEM_GOD_LEVEL || lvl === USER_LEVEL) {
+            return false; // Cannot remove built-in system levels
         }
+        if (!rolesMap[lvl]) {
+            return false;
+        }
+
+        var roleName = rolesMap[lvl].name;
+        delete rolesMap[lvl];
+        if (roleName) {
+            delete roleNamesMap[String(roleName).toLowerCase().trim()];
+        }
+
+        // Cascade-remove lvl from all remaining roles' inheritsFrom
+        Object.keys(rolesMap).forEach(function (k) {
+            var r = rolesMap[k];
+            if (r && Array.isArray(r.inheritsFrom)) {
+                r.inheritsFrom = r.inheritsFrom.filter(function (pid) {
+                    return resolveLevel(pid) !== lvl;
+                });
+            }
+        });
+
+        return true;
     }
 
     /**
@@ -109,10 +176,10 @@ var RoleManager = (function () {
      */
     function resolveLevel(input) {
         if (input === null || input === undefined) {
-            return 0;
+            return USER_LEVEL;
         }
         if (typeof input === 'number') {
-            return isNaN(input) ? 0 : input;
+            return isNaN(input) ? USER_LEVEL : input;
         }
         if (typeof input === 'string') {
             var trimmed = input.trim();
@@ -124,7 +191,7 @@ var RoleManager = (function () {
             if (Object.prototype.hasOwnProperty.call(roleNamesMap, lower)) {
                 return roleNamesMap[lower];
             }
-            return 0;
+            return USER_LEVEL;
         }
         if (typeof input === 'object') {
             if (typeof input.level === 'number' && !isNaN(input.level)) {
@@ -142,35 +209,11 @@ var RoleManager = (function () {
                     return roleNamesMap[rStr];
                 }
             }
-            if (input.isAdmin === true) {
-                return 1;
+            if (input.isAdmin === true || input.isSystemGod === true) {
+                return SYSTEM_GOD_LEVEL;
             }
         }
-        return 0;
-    }
-
-    /**
-     * Determines whether the given user or level is an administrator (level === 1).
-     * @param {*} userOrLevel
-     * @returns {boolean}
-     */
-    function isAdmin(userOrLevel) {
-        return resolveLevel(userOrLevel) === 1;
-    }
-
-    /**
-     * Determines whether the given user or level is a standard user.
-     * Standard users do not display a special role description on hover.
-     * @param {*} userOrLevel
-     * @returns {boolean}
-     */
-    function isStandardUser(userOrLevel) {
-        var lvl = resolveLevel(userOrLevel);
-        var role = rolesMap[lvl];
-        if (role && typeof role.isStandard === 'boolean') {
-            return role.isStandard;
-        }
-        return lvl === 0;
+        return USER_LEVEL;
     }
 
     /**
@@ -186,50 +229,292 @@ var RoleManager = (function () {
         return {
             level: lvl,
             name: 'role_' + lvl,
-            description: 'דרגה ' + lvl,
-            isStandard: (lvl === 0),
-            badgeClass: 'badge-role-user',
+            color: '',
+            inheritsFrom: [],
+            permissions: [],
+            isStandard: (lvl === USER_LEVEL),
+            isSystemGod: (lvl === SYSTEM_GOD_LEVEL),
+            badgeClass: (lvl === SYSTEM_GOD_LEVEL ? 'badge-role-system-god' : (lvl === USER_LEVEL ? 'badge-role-user' : 'badge-role-custom')),
             gradientClass: null
         };
     }
 
     /**
-     * Returns the role description (permission description) to display on hover.
-     * Returns an empty string for standard users.
+     * Determines whether the given user or level is System Administrator / מנהל מערכת (highest level).
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function isSystemGod(userOrLevel) {
+        return resolveLevel(userOrLevel) === SYSTEM_GOD_LEVEL;
+    }
+
+    /**
+     * Determines whether the given user or level is a standard user (level 0).
+     * Standard users do not display special role styling or hover tooltip.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function isStandardUser(userOrLevel) {
+        var lvl = resolveLevel(userOrLevel);
+        var role = rolesMap[lvl];
+        if (role && typeof role.isStandard === 'boolean') {
+            return role.isStandard;
+        }
+        return lvl === USER_LEVEL;
+    }
+
+    /**
+     * Checks if destinationLevel can be reached from startLevel by traversing the inheritsFrom chain.
+     * Used for circular inheritance protection.
+     * @param {number|string} startLevel
+     * @param {number|string} destinationLevel
+     * @param {Object} [customRolesMap] - Optional map of roles to use instead of internal rolesMap
+     * @returns {boolean} True if destinationLevel is reachable from startLevel
+     */
+    function canReach(startLevel, destinationLevel, customRolesMap) {
+        var start = resolveLevel(startLevel);
+        var dest = resolveLevel(destinationLevel);
+        if (start === dest) return true;
+
+        var roles = customRolesMap || rolesMap;
+        var visited = {};
+        visited[start] = true;
+        var queue = [start];
+
+        while (queue.length > 0) {
+            var curr = queue.shift();
+            var role = roles[curr];
+            if (role && Array.isArray(role.inheritsFrom)) {
+                for (var i = 0; i < role.inheritsFrom.length; i++) {
+                    var parentId = resolveLevel(role.inheritsFrom[i]);
+                    if (parentId === dest) {
+                        return true;
+                    }
+                    if (!visited[parentId]) {
+                        visited[parentId] = true;
+                        queue.push(parentId);
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether making targetLevel inherit from candidateParentId would create a circular inheritance cycle.
+     * A cycle is created if targetLevel === candidateParentId, or if candidateParentId can already reach targetLevel.
+     * @param {number|string} targetLevel
+     * @param {number|string} candidateParentId
+     * @param {Object} [customRolesMap]
+     * @returns {boolean} True if a circular dependency would be created
+     */
+    function wouldCreateCycle(targetLevel, candidateParentId, customRolesMap) {
+        var target = resolveLevel(targetLevel);
+        var candidate = resolveLevel(candidateParentId);
+        if (target === candidate) return true;
+
+        return canReach(candidate, target, customRolesMap);
+    }
+
+    /**
+     * Returns an array of numeric level IDs that inherit from targetLevel directly or transitively.
+     * All returned levels cannot be chosen as parents for targetLevel without causing circular inheritance.
+     * @param {number|string} targetLevel
+     * @param {Object} [customRolesMap]
+     * @returns {Array<number>}
+     */
+    function getDescendants(targetLevel, customRolesMap) {
+        var target = resolveLevel(targetLevel);
+        var roles = customRolesMap || rolesMap;
+        var descendants = [];
+
+        Object.keys(roles).forEach(function (key) {
+            var lvl = parseInt(key, 10);
+            if (!isNaN(lvl) && lvl !== target) {
+                if (canReach(lvl, target, roles)) {
+                    descendants.push(lvl);
+                }
+            }
+        });
+
+        return descendants;
+    }
+
+    /**
+     * Calculates the complete list of effective permissions for a role,
+     * traversing inheritance recursively.
+     * @param {*} userOrLevel
+     * @returns {Array<string>}
+     */
+    function getEffectivePermissions(userOrLevel) {
+        var lvl = resolveLevel(userOrLevel);
+        if (lvl === SYSTEM_GOD_LEVEL) {
+            return AVAILABLE_PERMISSIONS.map(function (p) { return p.id; });
+        }
+        var role = getRole(lvl);
+        var permsMap = {};
+
+        function addPermKey(p) {
+            var k = (typeof p === 'string') ? p.trim() : (p && typeof p.id === 'string' ? p.id.trim() : '');
+            if (k && k !== 'undefined') {
+                permsMap[k] = true;
+            }
+        }
+
+        (role.permissions || []).forEach(addPermKey);
+
+        var visited = {};
+        visited[lvl] = true;
+
+        function traverseInherited(parentIds) {
+            if (!Array.isArray(parentIds)) return;
+            parentIds.forEach(function (pid) {
+                var pNum = resolveLevel(pid);
+                if (visited[pNum]) return;
+                visited[pNum] = true;
+
+                // Cannot inherit from SYSTEM_GOD_LEVEL (מנהל מערכת)
+                if (pNum === SYSTEM_GOD_LEVEL) {
+                    return;
+                }
+
+                var pRole = rolesMap[pNum] || getRole(pNum);
+                if (pRole) {
+                    (pRole.permissions || []).forEach(addPermKey);
+                    if (Array.isArray(pRole.inheritsFrom)) {
+                        traverseInherited(pRole.inheritsFrom);
+                    }
+                }
+            });
+        }
+
+        if (Array.isArray(role.inheritsFrom)) {
+            traverseInherited(role.inheritsFrom);
+        }
+
+        return Object.keys(permsMap);
+    }
+
+    /**
+     * Checks whether a user or level has a specific permission.
+     * מנהל מערכת always has all permissions.
+     * @param {*} userOrLevel
+     * @param {string} permissionKey
+     * @returns {boolean}
+     */
+    function hasPermission(userOrLevel, permissionKey) {
+        var lvl = resolveLevel(userOrLevel);
+        if (lvl === SYSTEM_GOD_LEVEL) {
+            return true;
+        }
+        var effective = getEffectivePermissions(lvl);
+        return effective.indexOf(permissionKey) !== -1;
+    }
+
+    /**
+     * Checks if a user has access to the admin dashboard.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function canAccessAdmin(userOrLevel) {
+        return isSystemGod(userOrLevel) || hasPermission(userOrLevel, 'access_admin');
+    }
+
+    /**
+     * Legacy alias: returns true if the user has administrator privileges or admin panel access.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function isAdmin(userOrLevel) {
+        return canAccessAdmin(userOrLevel);
+    }
+
+    /**
+     * Checks if a user has permission to manage (create, edit, delete) permission levels.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function canManageRoles(userOrLevel) {
+        return isSystemGod(userOrLevel) || hasPermission(userOrLevel, 'manage_roles');
+    }
+
+    /**
+     * Checks if a user has permission to modify other users' permission levels.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function canModifyUserRoles(userOrLevel) {
+        return isSystemGod(userOrLevel) || hasPermission(userOrLevel, 'modify_user_roles');
+    }
+
+    /**
+     * Checks if a user has permission to send system messages.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function canSendSystemMessages(userOrLevel) {
+        return isSystemGod(userOrLevel) || hasPermission(userOrLevel, 'send_system_messages');
+    }
+
+    /**
+     * Checks if a user has permission to delete users.
+     * @param {*} userOrLevel
+     * @returns {boolean}
+     */
+    function canDeleteUsers(userOrLevel) {
+        return isSystemGod(userOrLevel) || hasPermission(userOrLevel, 'delete_users');
+    }
+
+    /**
+     * Returns the name of the role to display when hovering over the name of a user belonging to this level.
+     * Returns empty string for standard users.
      * @param {*} userOrLevel
      * @returns {string}
      */
-    function getRoleDescription(userOrLevel) {
+    function getRoleName(userOrLevel) {
         if (isStandardUser(userOrLevel)) {
             return '';
         }
         var role = getRole(userOrLevel);
-        return (role && role.description) ? role.description : '';
+        return (role && role.name) || '';
     }
 
     /**
-     * Checks if the user is a non-standard user with a description to display.
+     * Backward-compatibility alias for getRoleName.
+     */
+    function getRoleSystemName(userOrLevel) {
+        return getRoleName(userOrLevel);
+    }
+
+    /**
+     * Backward-compatibility alias for getRoleName.
+     */
+    function getRoleDescription(userOrLevel) {
+        return getRoleName(userOrLevel);
+    }
+
+    /**
+     * Checks if the user has a role name to display on hover.
      * @param {*} userOrLevel
      * @returns {boolean}
      */
     function hasRoleDescription(userOrLevel) {
-        return !isStandardUser(userOrLevel) && Boolean(getRoleDescription(userOrLevel));
+        return !isStandardUser(userOrLevel) && Boolean(getRoleName(userOrLevel));
     }
 
     /**
-     * Modular DOM helper: applies role hover attributes (title / Bootstrap tooltip)
-     * and optional visual styling to an element displaying a user's name.
+     * Applies identification color and hover tooltip to an element displaying a user's name.
      *
-     * When hovering over a user's name:
-     * - If the user is NOT a standard user, their role description is displayed on hover.
-     * - If the user IS a standard user, any existing role hover tooltip is cleared.
+     * Behavior:
+     * - If the user is non-standard (e.g. מנהל מערכת or custom level):
+     *   - Displays the level's name in a tooltip on mouse hover.
+     *   - Applies the identification color expression (solid color or CSS gradient).
+     * - If the user is standard (level 0):
+     *   - Clears any previous tooltip and role styling.
      *
      * @param {jQuery|HTMLElement} element
      * @param {*} userOrLevel
      * @param {Object} [options]
-     * @param {boolean} [options.initTooltip=true] - Whether to initialize Bootstrap tooltip.
-     * @param {string} [options.placement='top'] - Tooltip placement.
-     * @param {boolean} [options.applyGradient=true] - Whether to apply role's gradientClass.
      * @returns {jQuery}
      */
     function applyRoleHover(element, userOrLevel, options) {
@@ -240,27 +525,56 @@ var RoleManager = (function () {
         options = options || {};
         var placement = options.placement || 'top';
         var initTooltip = (options.initTooltip !== false);
-        var applyGradient = (options.applyGradient !== false);
-        var showNameTag = (options.showNameTag !== false);
+        var applyColor = (options.applyColor !== false);
 
         var lvl = resolveLevel(userOrLevel);
         var role = getRole(lvl);
-        var desc = getRoleDescription(userOrLevel);
+        var rName = getRoleName(userOrLevel);
 
-        // Clear existing role name tags attached to this element
-        $el.find('.role-name-tag').remove();
-        // Clear previous gradient classes
-        $el.removeClass('admin-golden-gradient role-atmosphere-gradient');
+        // Reset previous inline styles and role classes
+        $el.css({
+            'color': '',
+            'background': '',
+            '-webkit-background-clip': '',
+            '-webkit-text-fill-color': '',
+            'background-clip': '',
+            'display': '',
+            'font-weight': ''
+        });
+        $el.removeClass('admin-golden-gradient role-atmosphere-gradient role-custom-gradient');
 
-        if (desc) {
-            // Non-standard user: set role description on hover
-            $el.attr('title', desc);
+        if (rName) {
+            // Non-standard user: set role name tooltip on hover
+            $el.attr('title', rName);
             $el.attr('data-toggle', 'tooltip');
             $el.attr('data-placement', placement);
             $el.attr('data-role-level', lvl);
 
-            if (applyGradient && role.gradientClass) {
-                $el.addClass(role.gradientClass);
+            // Apply identification color expression if requested
+            if (applyColor) {
+                var colorExpr = (role && role.color) ? role.color.trim() : '';
+                if (colorExpr) {
+                    var isGradient = colorExpr.indexOf('gradient') !== -1;
+                    if (isGradient) {
+                        $el.css({
+                            'background': colorExpr,
+                            '-webkit-background-clip': 'text',
+                            '-webkit-text-fill-color': 'transparent',
+                            'background-clip': 'text',
+                            'color': 'transparent',
+                            'display': 'inline-block',
+                            'font-weight': '700'
+                        });
+                    } else {
+                        $el.css({
+                            'color': colorExpr,
+                            '-webkit-text-fill-color': colorExpr,
+                            'font-weight': '600'
+                        });
+                    }
+                } else if (role.gradientClass) {
+                    $el.addClass(role.gradientClass);
+                }
             }
 
             if (initTooltip && typeof $el.tooltip === 'function') {
@@ -295,6 +609,7 @@ var RoleManager = (function () {
     /**
      * Loads dynamic permission levels from Firestore's 'permissionLevels' collection
      * and updates the registry in real-time.
+     * Also seeds מנהל מערכת (1) and User (0) defaults if missing in Firestore.
      * @param {firebase.firestore.Firestore} db
      * @returns {Promise<Object>}
      */
@@ -302,22 +617,59 @@ var RoleManager = (function () {
         if (!db || typeof db.collection !== 'function') {
             return Promise.resolve(rolesMap);
         }
+
         return db.collection('permissionLevels').get()
             .then(function (snapshot) {
+                var loadedLevels = { 0: true, 1: true };
                 if (snapshot && !snapshot.empty) {
                     snapshot.forEach(function (doc) {
                         var data = doc.data() || {};
                         var lvl = (typeof data.level === 'number') ? data.level : parseInt(doc.id, 10);
                         if (!isNaN(lvl)) {
+                            loadedLevels[lvl] = true;
+                            var isGod = (lvl === SYSTEM_GOD_LEVEL) || Boolean(data.isSystemGod);
+                            var isStd = (lvl === USER_LEVEL) || Boolean(data.isStandard);
+
+                            var rName = data.name || data.systemName;
+                            if (isGod && (!rName || rName.toLowerCase() === 'admin' || rName === 'System God')) {
+                                rName = 'מנהל מערכת';
+                            }
+                            if (!rName) {
+                                rName = isGod ? 'מנהל מערכת' : (isStd ? 'User' : 'role_' + lvl);
+                            }
+
                             registerRole({
                                 level: lvl,
-                                name: data.name || (lvl === 0 ? 'user' : (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'role_' + lvl))),
-                                description: data.description || (lvl === 0 ? 'משתמש רגיל' : (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'דרגה ' + lvl))),
-                                isStandard: (typeof data.isStandard === 'boolean') ? data.isStandard : (lvl === 0),
-                                badgeClass: data.badgeClass || (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-user')),
-                                gradientClass: data.gradientClass || (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null)),
-                                hasNameTag: Boolean(data.hasNameTag),
-                                nameTagText: data.nameTagText || ''
+                                name: rName,
+                                color: data.color || (isGod ? 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)' : (lvl === 2 ? 'linear-gradient(135deg, #c02424 0%, #e83e8c 25%, #dc3545 50%, #f85032 75%, #b31217 100%)' : '')),
+                                inheritsFrom: Array.isArray(data.inheritsFrom)
+                                    ? data.inheritsFrom.map(function (n) { return parseInt(n, 10); }).filter(function (n) { return !isNaN(n) && n !== lvl && n !== SYSTEM_GOD_LEVEL; })
+                                    : [],
+                                permissions: Array.isArray(data.permissions)
+                                    ? data.permissions.filter(function (p) { return typeof p === 'string' && p.trim() && p !== 'undefined'; })
+                                    : (isGod ? ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users'] : []),
+                                isStandard: isStd,
+                                isSystemGod: isGod,
+                                badgeClass: data.badgeClass || (isGod ? 'badge-role-system-god' : (isStd ? 'badge-role-user' : 'badge-role-custom')),
+                                gradientClass: data.gradientClass || (isGod ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null))
+                            });
+                        }
+                    });
+
+                    // Clean up any roles in rolesMap that no longer exist in Firestore
+                    Object.keys(rolesMap).forEach(function (k) {
+                        var lvlNum = parseInt(k, 10);
+                        if (!loadedLevels[lvlNum]) {
+                            removeRole(lvlNum);
+                        }
+                    });
+
+                    // Ensure all remaining roles' inheritsFrom lists have deleted levels pruned
+                    Object.keys(rolesMap).forEach(function (k) {
+                        var r = rolesMap[k];
+                        if (r && Array.isArray(r.inheritsFrom)) {
+                            r.inheritsFrom = r.inheritsFrom.filter(function (pid) {
+                                return loadedLevels[resolveLevel(pid)];
                             });
                         }
                     });
@@ -331,27 +683,70 @@ var RoleManager = (function () {
     }
 
     /**
+     * Calculates the next available unique numeric serial ID.
+     * @returns {number}
+     */
+    function getNextSerialId() {
+        var keys = Object.keys(rolesMap).map(function (k) { return parseInt(k, 10); }).filter(function (n) { return !isNaN(n); });
+        if (keys.length === 0) return 2;
+        var maxId = Math.max.apply(null, keys);
+        return maxId < 2 ? 2 : maxId + 1;
+    }
+
+    /**
      * Returns an immutable copy of all registered roles.
      * @returns {Object}
      */
     function getAllRoles() {
-        return $.extend(true, {}, rolesMap);
+        if (typeof $ !== 'undefined' && typeof $.extend === 'function') {
+            return $.extend(true, {}, rolesMap);
+        }
+        return JSON.parse(JSON.stringify(rolesMap));
+    }
+
+    /**
+     * Returns the list of system available action permissions.
+     * @returns {Array<Object>}
+     */
+    function getAvailablePermissions() {
+        return AVAILABLE_PERMISSIONS.slice();
     }
 
     return {
+        SYSTEM_GOD_LEVEL: SYSTEM_GOD_LEVEL,
+        USER_LEVEL: USER_LEVEL,
         registerRole: registerRole,
+        removeRole: removeRole,
         resolveLevel: resolveLevel,
-        isStandardUser: isStandardUser,
-        isAdmin: isAdmin,
         getRole: getRole,
+        isSystemGod: isSystemGod,
+        isStandardUser: isStandardUser,
+        getEffectivePermissions: getEffectivePermissions,
+        hasPermission: hasPermission,
+        canAccessAdmin: canAccessAdmin,
+        isAdmin: isAdmin,
+        canManageRoles: canManageRoles,
+        canModifyUserRoles: canModifyUserRoles,
+        canSendSystemMessages: canSendSystemMessages,
+        canDeleteUsers: canDeleteUsers,
+        getRoleName: getRoleName,
+        getRoleSystemName: getRoleSystemName,
         getRoleDescription: getRoleDescription,
         hasRoleDescription: hasRoleDescription,
         applyRoleHover: applyRoleHover,
         loadFromFirestore: loadFromFirestore,
-        getAllRoles: getAllRoles
+        getNextSerialId: getNextSerialId,
+        getAllRoles: getAllRoles,
+        getAvailablePermissions: getAvailablePermissions,
+        canReach: canReach,
+        wouldCreateCycle: wouldCreateCycle,
+        getDescendants: getDescendants
     };
 })();
 
 if (typeof window !== 'undefined') {
     window.RoleManager = RoleManager;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = RoleManager;
 }

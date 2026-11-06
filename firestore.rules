@@ -68,9 +68,15 @@ rules_version = '2';
 // Collection: permissionLevels
 // Document ID: {levelId}
 // Fields:
-//   - level: number (required) - numeric permission level identifier (0 = user, 1 = admin, 2 = atmosphere)
-//   - name: string (required, 1..50 chars) - display name of the permission level
-//   - description: string (optional, max 200 chars) - description of permissions granted
+//   - level: number (required) - numeric permission level identifier
+//   - name: string (required, 1..100 chars) - display name of the permission level
+//   - color: string (optional, max 500 chars) - UI color / hex code
+//   - inheritsFrom: list of strings (optional, max 20 items) - permission level identifiers inherited
+//   - permissions: list of strings (optional, max 20 items) - granted permission strings
+//   - isSystemGod: bool (optional) - whether this level has root god-mode access
+//   - isStandard: bool (optional) - whether this is a default/standard tier
+//   - createdAt: number or timestamp (optional) - creation timestamp
+//   - updatedAt: number or timestamp (optional) - last update timestamp
 //
 // Collection: spotRequests
 // Document ID: {requestId}
@@ -249,11 +255,17 @@ service cloud.firestore {
 
     // Validate permission level document
     function isValidPermissionLevelDoc(data) {
-      return hasOnlyAllowedFields(['level', 'name', 'description']) &&
+      return hasOnlyAllowedFields(['level', 'name', 'color', 'inheritsFrom', 'permissions', 'isSystemGod', 'isStandard', 'createdAt', 'updatedAt']) &&
         hasRequiredFields(['level', 'name']) &&
         data.level is number &&
-        data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
-        (!('description' in data) || (data.description is string && data.description.size() <= 200));
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        (!('color' in data) || (data.color is string && data.color.size() <= 500)) &&
+        (!('inheritsFrom' in data) || (data.inheritsFrom is list && data.inheritsFrom.size() <= 20 && !data.inheritsFrom.hasAny([1, '1', data.level, string(data.level)]))) &&
+        (!('permissions' in data) || (data.permissions is list && data.permissions.size() <= 20)) &&
+        (!('isSystemGod' in data) || data.isSystemGod is bool) &&
+        (!('isStandard' in data) || data.isStandard is bool) &&
+        (!('createdAt' in data) || data.createdAt is number || data.createdAt is timestamp) &&
+        (!('updatedAt' in data) || data.updatedAt is number || data.updatedAt is timestamp);
     }
 
     // Validate spot request document
@@ -335,7 +347,8 @@ service cloud.firestore {
     // Permission levels collection, publicly readable, writable only by administrators
     match /permissionLevels/{levelId} {
       allow get, list: if true;
-      allow write: if isAdmin() && isValidPermissionLevelDoc(request.resource.data);
+      allow create, update: if isAdmin() && isValidPermissionLevelDoc(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // Publicly readable course feedback, append-only for authenticated users

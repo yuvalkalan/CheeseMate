@@ -20,40 +20,102 @@
     var db = firebase.firestore();
 
     var currentUser = null;
+    var currentUserData = null;
+    var currentUserLevel = 0;
     var allUsers = [];
     var userToDelete = null;
 
-    // Mapping of permission levels: numeric level -> { level, name, description }
-    var permissionLevelsMap = {
-        0: { level: 0, name: 'user', description: 'משתמש רגיל' },
-        1: { level: 1, name: 'admin', description: 'מנהל מערכת' },
-        2: { level: 2, name: 'atmosphere', description: 'א. אווירה' }
+    // Current user's capabilities
+    var currentUserPermissions = {
+        canAccessAdmin: false,
+        canManageRoles: false,
+        canModifyUserRoles: false,
+        canSendNotifications: false,
+        canDeleteUsers: false
     };
 
-    // DOM Elements
+    // Mapping of permission levels: numeric level -> role object
+    // Only מנהל מערכת (1) and User (0) are defined directly within the system.
+    var permissionLevelsMap = {
+        0: {
+            level: 0,
+            name: 'User',
+            color: '',
+            isStandard: true,
+            isSystemGod: false,
+            inheritsFrom: [],
+            permissions: []
+        },
+        1: {
+            level: 1,
+            name: 'מנהל מערכת',
+            color: 'linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%)',
+            isStandard: false,
+            isSystemGod: true,
+            inheritsFrom: [],
+            permissions: ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users']
+        }
+    };
+
+    // Role modal editing state
+    var editingRoleLevel = null;
+    var editingRoleDirectPerms = [];
+    var roleToDelete = null;
+
+    // DOM Elements - General & Views
     var loadingState = $('#admin-loading-state');
     var loginState = $('#admin-login-state');
     var deniedState = $('#admin-denied-state');
     var dashboardState = $('#admin-dashboard-state');
     var userProfileHeader = $('#admin-user-profile');
     var userNameHeader = $('#admin-user-name');
+    var adminUserRoleBadge = $('#admin-user-role-badge');
     var deniedUserEmail = $('#denied-user-email');
 
+    // Stats Overview
     var statTotalUsers = $('#stat-total-users');
     var statAdminUsers = $('#stat-admin-users');
     var statRegularUsers = $('#stat-regular-users');
+    var statTotalRoles = $('#stat-total-roles');
 
+    // Users Tab Elements
     var searchInput = $('#admin-search-input');
     var roleFilter = $('#admin-role-filter');
     var usersTableBody = $('#admin-users-tbody');
     var noUsersPlaceholder = $('#admin-no-users');
-    var refreshBtn = $('#admin-refresh-users-btn');
+    var refreshUsersBtn = $('#admin-refresh-users-btn');
 
+    // User Delete Modal Elements
     var deleteModal = $('#deleteUserModal');
     var deleteModalUsername = $('#delete-modal-username');
     var deleteModalEmail = $('#delete-modal-email');
     var deleteModalUid = $('#delete-modal-uid');
     var confirmDeleteBtn = $('#confirm-delete-user-btn');
+
+    // Roles Tab Elements
+    var rolesTableBody = $('#admin-roles-tbody');
+    var addRoleBtn = $('#admin-add-role-btn');
+    var refreshRolesBtn = $('#admin-refresh-roles-btn');
+
+    // Role Add/Edit Modal Elements
+    var editRoleModal = $('#editRoleModal');
+    var editRoleModalTitleText = $('#editRoleModalTitleText');
+    var roleForm = $('#admin-role-form');
+    var roleInputId = $('#role-input-id');
+    var roleInputName = $('#role-input-name');
+    var roleColorPicker = $('#role-color-picker');
+    var roleInputColor = $('#role-input-color');
+    var roleLivePreviewUser = $('#role-live-preview-user');
+    var roleInheritsContainer = $('#role-inherits-container');
+    var rolePermissionsChecklist = $('#role-permissions-checklist');
+    var saveRoleBtn = $('#save-role-btn');
+
+    // Role Delete Modal Elements
+    var deleteRoleModal = $('#deleteRoleModal');
+    var deleteRoleModalId = $('#delete-role-modal-id');
+    var deleteRoleModalName = $('#delete-role-modal-name');
+    var deleteRoleModalCount = $('#delete-role-modal-count');
+    var confirmDeleteRoleBtn = $('#confirm-delete-role-btn');
 
     // Notification Modal Elements
     var notifyModal = $('#sendNotificationModal');
@@ -106,86 +168,208 @@
         }
     }
 
-    function isAdministrator(user, data) {
-        if (!user || !data) return false;
-        return data.level === 1 || data.level === '1';
+    /**
+     * Updates and enforces current user's capabilities across the admin dashboard.
+     */
+    function updateCurrentUserCapabilities(user, data) {
+        currentUserData = data || {};
+        currentUserLevel = (typeof currentUserData.level === 'number') ? currentUserData.level : (parseInt(currentUserData.level, 10) || 0);
+        var isGod = (currentUserLevel === 1) || (typeof RoleManager !== 'undefined' && RoleManager.isSystemGod(currentUserLevel));
+
+        currentUserPermissions.canAccessAdmin = isGod || (typeof RoleManager !== 'undefined' && RoleManager.canAccessAdmin(currentUserLevel));
+        currentUserPermissions.canManageRoles = isGod || (typeof RoleManager !== 'undefined' && RoleManager.canManageRoles(currentUserLevel));
+        currentUserPermissions.canModifyUserRoles = isGod || (typeof RoleManager !== 'undefined' && RoleManager.canModifyUserRoles(currentUserLevel));
+        currentUserPermissions.canSendNotifications = isGod || (typeof RoleManager !== 'undefined' && RoleManager.canSendSystemMessages(currentUserLevel));
+        currentUserPermissions.canDeleteUsers = isGod || (typeof RoleManager !== 'undefined' && RoleManager.canDeleteUsers(currentUserLevel));
+
+        // Enforce permissions on top-level buttons
+        if (!currentUserPermissions.canSendNotifications) {
+            openNotifyModalBtn.prop('disabled', true).attr('title', 'אין לך הרשאה לשליחת הודעות מערכת');
+        } else {
+            openNotifyModalBtn.prop('disabled', false).attr('title', 'שליחת הודעת מערכת למשתמשים');
+        }
+
+        if (!currentUserPermissions.canManageRoles) {
+            addRoleBtn.prop('disabled', true).attr('title', 'רק מנהל מערכת או מורשים יכולים להוסיף רמות הרשאה');
+        } else {
+            addRoleBtn.prop('disabled', false).attr('title', 'הוסף רמת הרשאה חדשה');
+        }
+
+        var roleName = (typeof RoleManager !== 'undefined' ? (RoleManager.getRoleName ? RoleManager.getRoleName(currentUserLevel) : RoleManager.getRoleSystemName(currentUserLevel)) : '') || (isGod ? 'מנהל מערכת' : 'Administrator');
+        adminUserRoleBadge.text(roleName);
+        if (isGod) {
+            adminUserRoleBadge.attr('class', 'badge mr-2 badge-role-system-god');
+        } else {
+            adminUserRoleBadge.attr('class', 'badge mr-2 badge-role-custom');
+        }
     }
 
-    // Load and seed permissionLevels collection
+    function isAdministrator(user, data) {
+        if (!user || !data) return false;
+        var lvl = (typeof data.level === 'number') ? data.level : (parseInt(data.level, 10) || 0);
+        if (lvl === 1) return true;
+        if (typeof RoleManager !== 'undefined') {
+            return RoleManager.canAccessAdmin(lvl);
+        }
+        return false;
+    }
+
+    /**
+     * Loads permission levels from Firestore 'permissionLevels' collection.
+     * Seeds "מנהל מערכת" (1) and "User" (0) directly within Firestore if missing.
+     * Updates RoleManager and renders the roles table and filter dropdown.
+     */
     function loadPermissionLevels() {
+        var canWrite = (currentUserLevel === 1) || (currentUserPermissions && currentUserPermissions.canManageRoles);
         return db.collection('permissionLevels').get()
             .then(function (snapshot) {
-                if (snapshot.empty) {
-                    var batch = db.batch();
-                    batch.set(db.collection('permissionLevels').doc('0'), {
-                        level: 0,
-                        name: 'user',
-                        description: 'משתמש רגיל'
-                    });
-                    batch.set(db.collection('permissionLevels').doc('1'), {
-                        level: 1,
-                        name: 'admin',
-                        description: 'מנהל מערכת'
-                    });
-                    batch.set(db.collection('permissionLevels').doc('2'), {
-                        level: 2,
-                        name: 'atmosphere',
-                        description: 'א. אווירה'
-                    });
-                    return batch.commit().then(function () {
-                        console.log('Seeded permissionLevels collection with defaults (0: user, 1: admin, 2: atmosphere).');
-                        if (typeof RoleManager !== 'undefined') {
-                            RoleManager.registerRole({ level: 0, name: 'user', description: 'משתמש רגיל', isStandard: true });
-                            RoleManager.registerRole({ level: 1, name: 'admin', description: 'מנהל מערכת', isStandard: false });
-                            RoleManager.registerRole({ level: 2, name: 'atmosphere', description: 'א. אווירה', isStandard: false });
-                        }
-                    }).catch(function (seedErr) {
-                        console.warn('Could not seed permissionLevels:', seedErr);
-                    });
-                } else {
-                    // Check if level 2 exists, if not auto-seed it
-                    var hasAtmosphere = false;
+                var foundGod = false;
+                var foundUser = false;
+                var batch = db.batch();
+                var needsCommit = false;
+
+                if (!snapshot.empty) {
+                    var existingLevels = { 0: true, 1: true };
                     snapshot.forEach(function (doc) {
-                        if (doc.id === '2') {
-                            hasAtmosphere = true;
-                        }
+                        var d = doc.data() || {};
+                        var l = typeof d.level === 'number' ? d.level : parseInt(doc.id, 10);
+                        if (!isNaN(l)) existingLevels[l] = true;
                     });
-                    if (!hasAtmosphere) {
-                        db.collection('permissionLevels').doc('2').set({
-                            level: 2,
-                            name: 'atmosphere',
-                            description: 'א. אווירה'
-                        }).catch(function (seedErr) {
-                            console.warn('Could not seed permissionLevel 2:', seedErr);
-                        });
-                    }
 
                     snapshot.forEach(function (doc) {
                         var data = doc.data() || {};
                         var lvl = typeof data.level === 'number' ? data.level : parseInt(doc.id, 10);
-                        if (!isNaN(lvl)) {
-                            permissionLevelsMap[lvl] = {
-                                level: lvl,
-                                name: data.name || (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'user')),
-                                description: data.description || (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'משתמש רגיל'))
-                            };
-                            if (typeof RoleManager !== 'undefined') {
-                                RoleManager.registerRole({
-                                    level: lvl,
-                                    name: data.name || (lvl === 1 ? 'admin' : (lvl === 2 ? 'atmosphere' : 'user')),
-                                    description: data.description || (lvl === 1 ? 'מנהל מערכת' : (lvl === 2 ? 'א. אווירה' : 'משתמש רגיל')),
-                                    isStandard: (lvl === 0),
-                                    badgeClass: (lvl === 1 ? 'badge-role-admin' : (lvl === 2 ? 'badge-role-atmosphere' : 'badge-role-user')),
-                                    gradientClass: (lvl === 1 ? 'admin-golden-gradient' : (lvl === 2 ? 'role-atmosphere-gradient' : null))
-                                });
+
+                        // Clean up deprecated "systemName" and "description" fields from Firestore
+                        var updates = {};
+                        if (data.systemName !== undefined) {
+                            updates.systemName = firebase.firestore.FieldValue.delete();
+                        }
+                        if (data.description !== undefined) {
+                            updates.description = firebase.firestore.FieldValue.delete();
+                        }
+
+                        // Remove deleted levels or invalid references from inheritsFrom
+                        if (Array.isArray(data.inheritsFrom)) {
+                            var validInherits = data.inheritsFrom.filter(function (pid) {
+                                var pNum = parseInt(pid, 10);
+                                return !isNaN(pNum) && existingLevels[pNum] && pNum !== 1 && pNum !== lvl;
+                            });
+                            if (validInherits.length !== data.inheritsFrom.length) {
+                                updates.inheritsFrom = validInherits;
                             }
+                        }
+
+                        if (canWrite && Object.keys(updates).length > 0) {
+                            batch.update(doc.ref, updates);
+                            needsCommit = true;
+                        }
+
+                        if (lvl === 1) {
+                            foundGod = true;
+                            // Migrate legacy names "admin" or "System God" to "מנהל מערכת"
+                            if (canWrite && (!data.name || data.name === 'admin' || data.name === 'System God')) {
+                                batch.set(doc.ref, {
+                                    level: 1,
+                                    name: 'מנהל מערכת',
+                                    color: data.color || 'linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%)',
+                                    inheritsFrom: [],
+                                    permissions: ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users'],
+                                    isStandard: false,
+                                    isSystemGod: true,
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                }, { merge: true });
+                                needsCommit = true;
+                            }
+                        }
+                        if (lvl === 0) {
+                            foundUser = true;
                         }
                     });
                 }
+
+                if (canWrite && !foundGod) {
+                    batch.set(db.collection('permissionLevels').doc('1'), {
+                        level: 1,
+                        name: 'מנהל מערכת',
+                        color: 'linear-gradient(135deg, #d4af37 0%, #f6d365 25%, #fda085 60%, #cf8b17 100%)',
+                        inheritsFrom: [],
+                        permissions: ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users'],
+                        isStandard: false,
+                        isSystemGod: true,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    needsCommit = true;
+                }
+
+                if (canWrite && !foundUser) {
+                    batch.set(db.collection('permissionLevels').doc('0'), {
+                        level: 0,
+                        name: 'User',
+                        color: '',
+                        inheritsFrom: [],
+                        permissions: [],
+                        isStandard: true,
+                        isSystemGod: false,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    needsCommit = true;
+                }
+
+                var commitPromise = needsCommit ? batch.commit().catch(function (e) {
+                    console.warn('Batch commit seed note:', e.message);
+                }) : Promise.resolve();
+
+                return commitPromise.then(function () {
+                    if (typeof RoleManager !== 'undefined') {
+                        return RoleManager.loadFromFirestore(db);
+                    }
+                    return permissionLevelsMap;
+                });
+            })
+            .then(function () {
+                if (typeof RoleManager !== 'undefined') {
+                    permissionLevelsMap = RoleManager.getAllRoles();
+                }
+                updateRoleFilterOptions();
+                renderRolesTable();
             })
             .catch(function (err) {
-                console.warn('Error fetching permissionLevels, using fallback map:', err);
+                console.warn('Error fetching permissionLevels, using local registry:', err);
+                if (typeof RoleManager !== 'undefined') {
+                    permissionLevelsMap = RoleManager.getAllRoles();
+                }
+                updateRoleFilterOptions();
+                renderRolesTable();
             });
+    }
+
+    /**
+     * Updates the role filter select dropdown in the Users tab.
+     */
+    function updateRoleFilterOptions() {
+        var currentSelected = roleFilter.val() || 'all';
+        roleFilter.empty();
+        roleFilter.append($('<option value="all">כל רמות ההרשאה</option>'));
+
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var sortedLevels = Object.keys(allRoles).map(Number).sort(function (a, b) {
+            if (a === 1) return -1;
+            if (b === 1) return 1;
+            if (a === 0) return -1;
+            if (b === 0) return 1;
+            return a - b;
+        });
+
+        sortedLevels.forEach(function (lvl) {
+            var role = allRoles[lvl] || {};
+            var label = lvl + ' - ' + (role.name || ('דרגה ' + lvl));
+            if (lvl === 1) label += ' (מנהל מערכת)';
+            else if (lvl === 0) label += ' (User)';
+            roleFilter.append($('<option></option>').val(lvl).text(label));
+        });
+
+        roleFilter.val(currentSelected);
     }
 
     // Auth State Observer
@@ -198,8 +382,12 @@
 
         switchView('loading');
 
-        db.collection('users').doc(user.uid).get()
-            .then(function (doc) {
+        Promise.all([
+            db.collection('users').doc(user.uid).get(),
+            loadPermissionLevels()
+        ])
+            .then(function (results) {
+                var doc = results[0];
                 var data = doc.exists ? doc.data() : {};
 
                 if (isAdministrator(user, data)) {
@@ -212,22 +400,24 @@
 
                     var displayName = data.username || data.displayName || user.displayName || user.email || 'מנהל';
                     userNameHeader.text(displayName);
+
+                    updateCurrentUserCapabilities(user, data);
+
                     if (typeof RoleManager !== 'undefined') {
                         RoleManager.applyRoleHover(userNameHeader, data);
                     } else {
                         userNameHeader.addClass('admin-golden-gradient');
                     }
+
                     switchView('dashboard');
-                    loadPermissionLevels().then(function () {
-                        loadAllUsers();
-                    });
+                    loadAllUsers();
                 } else {
                     deniedUserEmail.text(user.email || user.uid);
                     switchView('denied');
                 }
             })
             .catch(function (err) {
-                console.error('Error fetching user document:', err);
+                console.error('Error fetching user document or permission levels:', err);
                 deniedUserEmail.text(user.email || user.uid);
                 switchView('denied');
             });
@@ -259,7 +449,7 @@
 
     // Load and Render Users
     function loadAllUsers() {
-        refreshBtn.prop('disabled', true).find('i').addClass('fa-spin');
+        refreshUsersBtn.prop('disabled', true).find('i').addClass('fa-spin');
 
         loadPermissionLevels().then(function () {
             return db.collection('users').get();
@@ -295,14 +485,15 @@
 
             updateStats();
             renderUsersTable();
-            refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
+            renderRolesTable();
+            refreshUsersBtn.prop('disabled', false).find('i').removeClass('fa-spin');
         }).catch(function (err) {
-            refreshBtn.prop('disabled', false).find('i').removeClass('fa-spin');
+            refreshUsersBtn.prop('disabled', false).find('i').removeClass('fa-spin');
             alert('שגיאה בטעינת המשתמשים: ' + err.message);
         });
     }
 
-    refreshBtn.click(loadAllUsers);
+    refreshUsersBtn.click(loadAllUsers);
 
     function updateStats() {
         var total = allUsers.length;
@@ -312,7 +503,7 @@
         allUsers.forEach(function (u) {
             if (u.level === 1) {
                 admins++;
-            } else {
+            } else if (u.level === 0) {
                 regulars++;
             }
         });
@@ -350,51 +541,58 @@
             return isNaN(val.getTime()) ? null : val;
         }
         if (typeof val === 'number') {
-            var ms = val < 1e11 ? val * 1000 : val;
-            var dNum = new Date(ms);
-            return isNaN(dNum.getTime()) ? null : dNum;
+            var d = new Date(val);
+            return isNaN(d.getTime()) ? null : d;
         }
         if (typeof val === 'string') {
-            var parsed = Date.parse(val);
-            if (!isNaN(parsed)) {
-                return new Date(parsed);
-            }
-        }
-        if (typeof val === 'object' && typeof val.seconds === 'number') {
-            var dSec = new Date(val.seconds * 1000 + (val.nanoseconds ? val.nanoseconds / 1e6 : 0));
-            return isNaN(dSec.getTime()) ? null : dSec;
+            var parsed = new Date(val);
+            return isNaN(parsed.getTime()) ? null : parsed;
         }
         return null;
     }
 
     function extractUserLastSeen(d) {
-        var raw = d && (d.lastSeen || d.last_seen || d.lastActive || d.lastLogin || d.lastSeenAt || d.updatedAt);
-        return parseDate(raw);
+        if (!d) return null;
+        if (d.lastSeen) {
+            var d1 = parseDate(d.lastSeen);
+            if (d1) return d1;
+        }
+        if (d.updatedAt) {
+            var d2 = parseDate(d.updatedAt);
+            if (d2) return d2;
+        }
+        if (d.createdAt) {
+            var d3 = parseDate(d.createdAt);
+            if (d3) return d3;
+        }
+        return null;
     }
 
-    function formatLastSeen(date) {
-        if (!date) {
+    function formatLastSeen(dateObj) {
+        if (!dateObj) {
             return {
-                html: '<span class="text-muted small" title="לא נרשמה פעילות">-</span>',
+                html: '<span class="text-muted small">לא ידוע</span>',
                 title: 'לא נרשמה פעילות'
             };
         }
 
-        var now = Date.now();
-        var timeMs = date.getTime();
-        var diffMs = now - timeMs;
-        var day = padZero(date.getDate());
-        var month = padZero(date.getMonth() + 1);
-        var year = date.getFullYear();
+        var day = padZero(dateObj.getDate());
+        var month = padZero(dateObj.getMonth() + 1);
+        var year = dateObj.getFullYear();
+        var hours = padZero(dateObj.getHours());
+        var mins = padZero(dateObj.getMinutes());
+
         var fullDateStr = day + '/' + month + '/' + year;
-        var hours = padZero(date.getHours());
-        var minutes = padZero(date.getMinutes());
-        var timeStr = hours + ':' + minutes;
+        var timeStr = hours + ':' + mins;
         var fullFormatted = fullDateStr + ' ' + timeStr;
+
+        var now = new Date();
+        var diffMs = now.getTime() - dateObj.getTime();
+        if (diffMs < 0) diffMs = 0;
 
         if (diffMs < 2 * 60 * 1000) {
             return {
-                html: '<span class="badge badge-success font-weight-normal py-1 px-2"><i class="fas fa-circle ml-1 small" style="font-size: 0.5rem; vertical-align: middle;"></i> מחובר עכשיו</span><small class="last-seen-date d-block mt-1">' + fullFormatted + '</small>',
+                html: '<span class="badge badge-success pulse-badge ml-1"><i class="fas fa-circle mr-1" style="font-size: 8px;"></i> פעיל כעת</span>',
                 title: fullFormatted
             };
         }
@@ -433,16 +631,11 @@
 
         var filtered = allUsers.filter(function (u) {
             var matchesRole = true;
-            if (selectedRole === '1') {
-                matchesRole = (u.level === 1);
-            } else if (selectedRole === '0') {
-                matchesRole = (u.level === 0);
-            } else if (selectedRole === '2') {
-                matchesRole = (u.level === 2);
+            if (selectedRole !== 'all') {
+                matchesRole = (u.level === parseInt(selectedRole, 10));
             }
 
             if (!matchesRole) return false;
-
             if (!q) return true;
 
             var matchName = u.username.toLowerCase().indexOf(q) !== -1;
@@ -461,17 +654,21 @@
 
         noUsersPlaceholder.addClass('d-none');
 
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var sortedLevels = Object.keys(allRoles).map(Number).sort(function (a, b) {
+            if (a === 1) return -1;
+            if (b === 1) return 1;
+            if (a === 0) return -1;
+            if (b === 0) return 1;
+            return a - b;
+        });
+
         filtered.forEach(function (u) {
             var isCurrent = currentUser && currentUser.uid === u.uid;
-            var isAdmin = (u.level === 1);
-            var levelInfo = permissionLevelsMap[u.level] || {
-                level: u.level,
-                name: u.level === 1 ? 'admin' : 'user',
-                description: u.level === 1 ? 'מנהל מערכת' : 'משתמש רגיל'
-            };
+            var roleInfo = allRoles[u.level] || (typeof RoleManager !== 'undefined' ? RoleManager.getRole(u.level) : { level: u.level, name: 'דרגה ' + u.level });
 
             var avatarChar = u.username ? u.username.charAt(0).toUpperCase() : '?';
-            var avatarBg = isAdmin ? '#e74a3b' : '#4e73df';
+            var avatarBg = (u.level === 1) ? '#d97706' : ((u.level === 0) ? '#4e73df' : '#4f46e5');
 
             var tr = $('<tr></tr>');
 
@@ -481,16 +678,15 @@
             var avatar = $('<div class="user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarChar);
             var userMeta = $('<div></div>');
             var nameSpan = $('<span></span>').text(u.username);
+
             if (typeof RoleManager !== 'undefined') {
                 RoleManager.applyRoleHover(nameSpan, u);
-            } else if (isAdmin) {
+            } else if (u.level === 1) {
                 nameSpan.addClass('admin-golden-gradient');
             } else {
-                nameSpan.addClass('text-dark');
+                nameSpan.addClass('user-name-standard');
             }
-            if (typeof RoleManager !== 'undefined' && RoleManager.isStandardUser(u)) {
-                nameSpan.addClass('text-dark');
-            }
+
             var nameEl = $('<div class="font-weight-bold"></div>').append(nameSpan);
             if (isCurrent) {
                 nameEl.append(' <span class="badge badge-light border text-muted small">(אתה)</span>');
@@ -526,16 +722,18 @@
             // 4. Role / Level column with dropdown selector
             var roleTd = $('<td></td>');
             var roleSelect = $('<select class="custom-select custom-select-sm" style="width: auto; min-width: 140px;"></select>');
-            var sortedLevels = Object.keys(permissionLevelsMap).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+
             sortedLevels.forEach(function (lvlNum) {
-                var pInfo = permissionLevelsMap[lvlNum] || { name: 'level_' + lvlNum, description: '' };
+                var pInfo = allRoles[lvlNum] || { name: 'רמה ' + lvlNum };
                 var isSelected = (u.level === lvlNum);
-                var label = lvlNum + ' - ' + pInfo.name + (pInfo.description ? ' (' + pInfo.description + ')' : '');
+                var label = lvlNum + ' - ' + (pInfo.name || ('רמה ' + lvlNum));
                 roleSelect.append($('<option></option>').val(lvlNum).text(label).prop('selected', isSelected));
             });
 
             if (isCurrent) {
                 roleSelect.prop('disabled', true).attr('title', 'לא ניתן לשנות את הרשאת החשבון המחובר');
+            } else if (!currentUserPermissions.canModifyUserRoles) {
+                roleSelect.prop('disabled', true).attr('title', 'אין לך הרשאה לשנות דרגות של משתמשים');
             } else {
                 roleSelect.change(function () {
                     var newLevel = parseInt($(this).val(), 10);
@@ -545,14 +743,14 @@
 
             var badgeClass = 'badge-role-user';
             if (u.level === 1) {
-                badgeClass = 'badge-role-admin';
+                badgeClass = 'badge-role-system-god';
             } else if (u.level === 2) {
                 badgeClass = 'badge-role-atmosphere';
             } else if (typeof RoleManager !== 'undefined') {
-                badgeClass = RoleManager.getRole(u).badgeClass || 'badge-role-user';
+                badgeClass = RoleManager.getRole(u).badgeClass || 'badge-role-custom';
             }
 
-            var roleBadgeText = (levelInfo.description ? levelInfo.description : levelInfo.name) + ' (' + u.level + ')';
+            var roleBadgeText = (roleInfo.name || 'דרגה ' + u.level) + ' (' + u.level + ')';
             var roleBadge = $('<span class="badge mr-2 ' + badgeClass + '"></span>').text(roleBadgeText);
 
             var roleWrapper = $('<div class="d-flex align-items-center"></div>');
@@ -578,11 +776,17 @@
                     openSendNotificationModal(u.uid);
                 });
 
+            if (!currentUserPermissions.canSendNotifications) {
+                sendNotifyBtn.prop('disabled', true).attr('title', 'אין לך הרשאה לשליחת הודעות מערכת');
+            }
+
             var deleteBtn = $('<button class="btn btn-outline-danger btn-sm" title="מחק משתמש לצמיתות"></button>')
                 .html('<i class="fas fa-trash-alt ml-1"></i> מחק');
 
             if (isCurrent) {
                 deleteBtn.prop('disabled', true).attr('title', 'לא ניתן למחוק את החשבון המחובר מלוח הניהול');
+            } else if (!currentUserPermissions.canDeleteUsers) {
+                deleteBtn.prop('disabled', true).attr('title', 'אין לך הרשאה למחיקת משתמשים');
             } else {
                 deleteBtn.click(function () {
                     openDeleteModal(u);
@@ -590,7 +794,6 @@
             }
 
             actionsTd.append(sendNotifyBtn, deleteBtn);
-
             tr.append(userTd, emailTd, uidTd, roleTd, friendsTd, lastSeenTd, actionsTd);
             usersTableBody.append(tr);
         });
@@ -601,6 +804,12 @@
 
     // Change User Level
     function changeUserLevel(targetUid, newLevel, selectEl) {
+        if (!currentUserPermissions.canModifyUserRoles) {
+            alert('אין לך הרשאה לשנות רמת הרשאה של משתמשים.');
+            renderUsersTable();
+            return;
+        }
+
         selectEl.prop('disabled', true);
         var numLevel = parseInt(newLevel, 10);
 
@@ -608,13 +817,13 @@
             level: numLevel
         }).then(function () {
             selectEl.prop('disabled', false);
-            // Update in memory
             var userObj = allUsers.find(function (u) { return u.uid === targetUid; });
             if (userObj) {
                 userObj.level = numLevel;
             }
             updateStats();
             renderUsersTable();
+            renderRolesTable();
         }).catch(function (err) {
             selectEl.prop('disabled', false);
             alert('שגיאה בעדכון הרשאת המשתמש: ' + err.message);
@@ -622,7 +831,7 @@
         });
     }
 
-    // Open Delete Modal
+    // Open User Delete Modal
     function openDeleteModal(u) {
         userToDelete = u;
         deleteModalUsername.text(u.username);
@@ -630,8 +839,6 @@
             RoleManager.applyRoleHover(deleteModalUsername, u);
         } else if (u.level === 1) {
             deleteModalUsername.addClass('admin-golden-gradient');
-        } else if (u.level === 2) {
-            deleteModalUsername.addClass('role-atmosphere-gradient');
         } else {
             deleteModalUsername.removeClass('admin-golden-gradient role-atmosphere-gradient');
         }
@@ -644,11 +851,14 @@
     // Confirm Delete User
     confirmDeleteBtn.click(function () {
         if (!userToDelete) return;
+        if (!currentUserPermissions.canDeleteUsers) {
+            alert('אין לך הרשאה למחיקת משתמשים.');
+            return;
+        }
 
         var targetUid = userToDelete.uid;
         confirmDeleteBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm ml-1" role="status" aria-hidden="true"></span> מוחק נתונים...');
 
-        // 1. Find all friends or connected users that reference targetUid and clean them up
         var batch = db.batch();
 
         allUsers.forEach(function (u) {
@@ -667,7 +877,6 @@
             }
         });
 
-        // 2. Fetch and delete semesters subcollection
         var semestersPromise = db.collection('users').doc(targetUid).collection('semesters').get()
             .then(function (semSnap) {
                 semSnap.forEach(function (sDoc) {
@@ -677,7 +886,6 @@
                 console.warn('Could not list semesters:', e);
             });
 
-        // 3. Fetch and delete notifications subcollection
         var notifsPromise = db.collection('users').doc(targetUid).collection('notifications').get()
             .then(function (notifSnap) {
                 notifSnap.forEach(function (nDoc) {
@@ -688,21 +896,621 @@
             });
 
         Promise.all([semestersPromise, notifsPromise]).then(function () {
-            // 4. Delete the user document itself
             batch.delete(db.collection('users').doc(targetUid));
-
             return batch.commit();
         }).then(function () {
             deleteModal.modal('hide');
-            // Remove from local list
             allUsers = allUsers.filter(function (u) { return u.uid !== targetUid; });
             updateStats();
             renderUsersTable();
+            renderRolesTable();
             alert('המשתמש ' + userToDelete.username + ' נמחק בהצלחה לצמיתות.');
             userToDelete = null;
         }).catch(function (err) {
             confirmDeleteBtn.prop('disabled', false).html('<i class="fas fa-trash-alt ml-1"></i> מחק משתמש');
             alert('שגיאה במחיקת המשתמש: ' + err.message);
+        });
+    });
+
+    // ==========================================
+    // Permission Levels (Roles) Management Logic
+    // ==========================================
+
+    function renderRolesTable() {
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var roleKeys = Object.keys(allRoles).map(Number).sort(function (a, b) {
+            if (a === 1) return -1;
+            if (b === 1) return 1;
+            if (a === 0) return -1;
+            if (b === 0) return 1;
+            return a - b;
+        });
+
+        rolesTableBody.empty();
+        statTotalRoles.text(roleKeys.length);
+
+        roleKeys.forEach(function (lvl) {
+            var role = allRoles[lvl] || {};
+            var isGod = (lvl === 1);
+            var isStd = (lvl === 0);
+            var assignedCount = allUsers.filter(function (u) { return u.level === lvl; }).length;
+
+            var tr = $('<tr></tr>');
+
+            // 1. Serial ID column
+            var idTd = $('<td></td>');
+            var idBadgeClass = isGod ? 'badge-warning text-dark' : (isStd ? 'badge-secondary' : 'badge-primary');
+            idTd.html('<span class="badge ' + idBadgeClass + ' font-weight-bold" style="font-size: 0.95rem;">' + lvl + '</span>');
+
+            // 2. Name column with hover preview
+            var nameTd = $('<td></td>');
+            var nameSpan = $('<span class="font-weight-bold ml-2"></span>').text(role.name || ('דרגה ' + lvl));
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.applyRoleHover(nameSpan, lvl);
+            }
+            nameTd.append(nameSpan);
+
+            // 3. Identification Color Expression column
+            var colorTd = $('<td></td>');
+            var colorExpr = (role.color || '').trim();
+            if (colorExpr) {
+                var isGrad = colorExpr.indexOf('gradient') !== -1;
+                var swatch = $('<span class="color-swatch-circle ml-2"></span>');
+                if (isGrad) {
+                    swatch.css('background', colorExpr);
+                } else {
+                    swatch.css('background-color', colorExpr);
+                }
+                var colorCode = $('<code class="small text-muted font-monospace" style="max-width: 140px; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;"></code>')
+                    .text(colorExpr)
+                    .attr('title', colorExpr);
+                colorTd.append(swatch, colorCode);
+            } else {
+                colorTd.html('<span class="text-muted small">ברירת מחדל (ללא צבע)</span>');
+            }
+
+            // 4. Inherited From column
+            var inheritTd = $('<td></td>');
+            if (Array.isArray(role.inheritsFrom) && role.inheritsFrom.length > 0) {
+                role.inheritsFrom.forEach(function (parentId) {
+                    var pRole = allRoles[parentId] || { name: 'רמה ' + parentId };
+                    inheritTd.append($('<span class="inherited-role-badge"></span>').html('<i class="fas fa-level-up-alt ml-1 text-primary"></i>' + escapeHtml(pRole.name || ('רמה ' + parentId)) + ' (' + parentId + ')'));
+                });
+            } else {
+                inheritTd.html('<span class="text-muted small">ללא הורשה</span>');
+            }
+
+            // 5. Specific Action Permissions column
+            var permsTd = $('<td></td>');
+            var effective = (typeof RoleManager !== 'undefined') ? RoleManager.getEffectivePermissions(lvl) : (role.permissions || []);
+            if (isGod) {
+                permsTd.html('<span class="badge badge-warning text-dark font-weight-bold"><i class="fas fa-infinity ml-1"></i> כל הסמכויות (שליטה מלאה)</span>');
+            } else if (effective.length === 0) {
+                permsTd.html('<span class="text-muted small">ללא סמכויות מיוחדות</span>');
+            } else {
+                effective.forEach(function (permKey) {
+                    var permObj = (typeof RoleManager !== 'undefined') ? RoleManager.getAvailablePermissions().find(function (p) { return p.id === permKey; }) : null;
+                    var pLabel = permObj ? (permObj.label ? permObj.label.split(' (')[0] : permObj.id) : permKey;
+                    var isDirect = Array.isArray(role.permissions) && role.permissions.indexOf(permKey) !== -1;
+                    var pill = $('<span class="permission-pill"></span>').text(pLabel);
+                    if (!isDirect) {
+                        pill.addClass('border-info text-info').attr('title', 'מורש מדרגת אב');
+                    }
+                    permsTd.append(pill);
+                });
+            }
+
+            // 6. Assigned users count
+            var usersTd = $('<td></td>');
+            usersTd.html('<span class="badge badge-light border"><i class="fas fa-users ml-1 text-secondary"></i> ' + assignedCount + '</span>');
+
+            // 7. Status / Type column
+            var statusTd = $('<td></td>');
+            if (isGod) {
+                statusTd.html('<span class="badge badge-dark">מובנה (מנהל מערכת)</span>');
+            } else if (isStd) {
+                statusTd.html('<span class="badge badge-secondary">מובנה (User)</span>');
+            } else {
+                statusTd.html('<span class="badge badge-info">מותאם אישית</span>');
+            }
+
+            // 8. Actions column
+            var actionsTd = $('<td class="text-center"></td>');
+            var editBtn = $('<button class="btn btn-outline-primary btn-sm ml-1" title="ערוך רמת הרשאה"></button>')
+                .html('<i class="fas fa-edit ml-1"></i> ערוך')
+                .click(function () {
+                    openEditRoleModal(role);
+                });
+
+            var delBtn = $('<button class="btn btn-outline-danger btn-sm" title="מחק רמת הרשאה"></button>')
+                .html('<i class="fas fa-trash-alt ml-1"></i> מחק');
+
+            if (!currentUserPermissions.canManageRoles) {
+                editBtn.prop('disabled', true).attr('title', 'אין לך הרשאה לערוך רמות הרשאה');
+                delBtn.prop('disabled', true).attr('title', 'אין לך הרשאה למחוק רמות הרשאה');
+            } else if (isGod || isStd) {
+                delBtn.prop('disabled', true).attr('title', 'לא ניתן למחוק דרגת מערכת מובנית');
+            } else {
+                delBtn.click(function () {
+                    openDeleteRoleModal(role, assignedCount);
+                });
+            }
+
+            actionsTd.append(editBtn, delBtn);
+            tr.append(idTd, nameTd, colorTd, inheritTd, permsTd, usersTd, statusTd, actionsTd);
+            rolesTableBody.append(tr);
+        });
+    }
+
+    refreshRolesBtn.click(function () {
+        refreshRolesBtn.prop('disabled', true).find('i').addClass('fa-spin');
+        loadPermissionLevels().finally(function () {
+            refreshRolesBtn.prop('disabled', false).find('i').removeClass('fa-spin');
+        });
+    });
+
+    addRoleBtn.click(function () {
+        openEditRoleModal(null);
+    });
+
+    /**
+     * Updates the live preview box in the Edit/Add Role modal.
+     */
+    function updateRoleLivePreview() {
+        var sName = (roleInputName.val() || '').trim() || 'שם משתמש';
+        var color = (roleInputColor.val() || '').trim();
+
+        roleLivePreviewUser.text(sName);
+        roleLivePreviewUser.css({
+            'color': '',
+            'background': '',
+            '-webkit-background-clip': '',
+            '-webkit-text-fill-color': '',
+            'background-clip': '',
+            'display': '',
+            'font-weight': ''
+        });
+
+        if (color) {
+            if (color.indexOf('gradient') !== -1) {
+                roleLivePreviewUser.css({
+                    'background': color,
+                    '-webkit-background-clip': 'text',
+                    '-webkit-text-fill-color': 'transparent',
+                    'background-clip': 'text',
+                    'color': 'transparent',
+                    'display': 'inline-block',
+                    'font-weight': '700'
+                });
+            } else {
+                roleLivePreviewUser.css({
+                    'color': color,
+                    '-webkit-text-fill-color': color,
+                    'font-weight': '600'
+                });
+            }
+        } else {
+            roleLivePreviewUser.css({
+                'color': '',
+                '-webkit-text-fill-color': ''
+            });
+        }
+
+        roleLivePreviewUser.attr('title', sName);
+        if (typeof roleLivePreviewUser.tooltip === 'function') {
+            try { roleLivePreviewUser.tooltip('dispose'); } catch (e) {}
+            try {
+                roleLivePreviewUser.tooltip({
+                    placement: 'top',
+                    trigger: 'hover',
+                    boundary: 'window'
+                });
+            } catch (e) {}
+        }
+    }
+
+    // Input handlers for live preview
+    roleInputName.on('input', updateRoleLivePreview);
+    roleInputColor.on('input', function () {
+        var val = $(this).val().trim();
+        if (val.startsWith('#') && (val.length === 7 || val.length === 4)) {
+            roleColorPicker.val(val);
+        }
+        updateRoleLivePreview();
+    });
+    roleColorPicker.on('input change', function () {
+        roleInputColor.val($(this).val());
+        updateRoleLivePreview();
+    });
+    $(document).on('click', '.color-preset-pill', function () {
+        var preset = $(this).data('preset') || '';
+        roleInputColor.val(preset);
+        if (preset.startsWith('#')) {
+            roleColorPicker.val(preset);
+        }
+        updateRoleLivePreview();
+    });
+
+    /**
+     * Opens the modal to add a new role or edit an existing one.
+     */
+    function openEditRoleModal(role) {
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var availablePerms = (typeof RoleManager !== 'undefined') ? RoleManager.getAvailablePermissions() : [];
+
+        if (role) {
+            // Editing existing role
+            editingRoleLevel = role.level;
+            editingRoleDirectPerms = Array.isArray(role.permissions)
+                ? role.permissions.filter(function (p) { return p && p !== 'undefined'; }).slice()
+                : [];
+            editRoleModalTitleText.text('עריכת רמת הרשאה: ' + (role.name || ''));
+            roleInputId.val(role.level);
+            roleInputName.val(role.name || '');
+            roleInputColor.val(role.color || '');
+            if (role.color && role.color.startsWith('#')) {
+                roleColorPicker.val(role.color);
+            } else {
+                roleColorPicker.val('#4e73df');
+            }
+        } else {
+            // Adding new role - automatically calculate next unique serial ID
+            var nextId = (typeof RoleManager !== 'undefined') ? RoleManager.getNextSerialId() : 2;
+            editingRoleLevel = null;
+            editingRoleDirectPerms = [];
+            editRoleModalTitleText.text('הוספת רמת הרשאה חדשה');
+            roleInputId.val(nextId);
+            roleInputName.val('');
+            roleInputColor.val('');
+            roleColorPicker.val('#4e73df');
+        }
+
+        var isGod = (editingRoleLevel === 1);
+        var isStd = (editingRoleLevel === 0);
+
+        // Populate inheritance checklist
+        roleInheritsContainer.empty();
+        var inheritList = (role && Array.isArray(role.inheritsFrom)) ? role.inheritsFrom : [];
+        var targetLvl = editingRoleLevel !== null ? editingRoleLevel : parseInt(roleInputId.val(), 10);
+
+        // Cannot inherit from System Administrator (Level 1) or from the role itself
+        var otherRoles = Object.keys(allRoles).map(Number).filter(function (l) { return l !== targetLvl && l !== 1; });
+        if (otherRoles.length === 0) {
+            roleInheritsContainer.html('<small class="text-muted">אין רמות הרשאה אחרות להורשה</small>');
+        } else {
+            otherRoles.sort(function (a, b) { return a - b; }).forEach(function (otherLvl) {
+                var oRole = allRoles[otherLvl];
+                var isChecked = inheritList.indexOf(otherLvl) !== -1;
+                var row = $('<div class="custom-control custom-checkbox custom-control-inline mb-1 align-items-center"></div>');
+                var chkId = 'chk-inherit-' + otherLvl;
+                var chk = $('<input type="checkbox" class="custom-control-input role-inherit-chk">')
+                    .attr('id', chkId)
+                    .val(otherLvl)
+                    .prop('checked', isChecked);
+
+                // Circular inheritance protection: if otherLvl already inherits from targetLvl, selecting it would cause a cycle
+                var isCycle = false;
+                if (typeof RoleManager !== 'undefined' && targetLvl !== null && !isNaN(targetLvl)) {
+                    isCycle = RoleManager.wouldCreateCycle(targetLvl, otherLvl, allRoles);
+                }
+
+                if (isGod || isCycle) {
+                    chk.prop('disabled', true);
+                    if (isCycle) {
+                        chk.prop('checked', false);
+                    }
+                }
+
+                var label = $('<label class="custom-control-label small"></label>')
+                    .attr('for', chkId)
+                    .text((oRole.name || ('רמה ' + otherLvl)) + ' (' + otherLvl + ')');
+
+                if (isCycle) {
+                    label.addClass('text-muted');
+                    label.append(' <span class="badge badge-warning text-dark ml-1" title="רמה זו כבר מורישה מהרמה הנוכחית - בחירה בה תיצור מעגל הורשה"><i class="fas fa-ban ml-1"></i>יוצר מעגל</span>');
+                }
+
+                row.append(chk, label);
+                roleInheritsContainer.append(row);
+            });
+        }
+
+        // Listen for direct permission checkbox changes
+        rolePermissionsChecklist.off('change').on('change', '.role-perm-chk:not(:disabled)', function () {
+            var pVal = $(this).val();
+            var isChk = $(this).is(':checked');
+            if (isChk) {
+                if (editingRoleDirectPerms.indexOf(pVal) === -1) {
+                    editingRoleDirectPerms.push(pVal);
+                }
+            } else {
+                editingRoleDirectPerms = editingRoleDirectPerms.filter(function (p) { return p !== pVal; });
+            }
+        });
+
+        // Populate permissions checklist
+        function refreshPermissionsChecklist() {
+            rolePermissionsChecklist.empty();
+
+            // Calculate which permissions are inherited from selected inheritance checkboxes
+            var selectedInherits = [];
+            roleInheritsContainer.find('.role-inherit-chk:checked').each(function () {
+                selectedInherits.push(parseInt($(this).val(), 10));
+            });
+
+            var inheritedPerms = {};
+            selectedInherits.forEach(function (pId) {
+                var pPerms = (typeof RoleManager !== 'undefined') ? RoleManager.getEffectivePermissions(pId) : [];
+                pPerms.forEach(function (k) {
+                    if (k && k !== 'undefined') {
+                        inheritedPerms[k] = true;
+                    }
+                });
+            });
+
+            availablePerms.forEach(function (perm) {
+                var isDirect = editingRoleDirectPerms.indexOf(perm.id) !== -1;
+                var isInherited = Boolean(inheritedPerms[perm.id]);
+                var isChecked = isGod || isDirect || isInherited;
+
+                var itemDiv = $('<div class="perm-checkbox-item custom-control custom-checkbox d-flex align-items-center justify-content-between"></div>');
+                if (isInherited) {
+                    itemDiv.addClass('is-inherited');
+                }
+
+                var leftDiv = $('<div></div>');
+                var chkId = 'chk-perm-' + perm.id;
+                var chk = $('<input type="checkbox" class="custom-control-input role-perm-chk">')
+                    .attr('id', chkId)
+                    .val(perm.id)
+                    .prop('checked', isChecked);
+
+                if (isGod || isInherited) {
+                    chk.prop('disabled', true);
+                }
+
+                var label = $('<label class="custom-control-label font-weight-bold small"></label>')
+                    .attr('for', chkId)
+                    .text(perm.label);
+
+                leftDiv.append(chk, label);
+                if (perm.description) {
+                    leftDiv.append($('<small class="text-muted d-block mr-4"></small>').text(perm.description));
+                }
+
+                var badgeDiv = $('<div></div>');
+                if (isGod) {
+                    badgeDiv.html('<span class="badge badge-warning text-dark">שליטה מלאה</span>');
+                } else if (isInherited) {
+                    badgeDiv.html('<span class="badge badge-info"><i class="fas fa-level-up-alt ml-1"></i> מורש</span>');
+                }
+
+                itemDiv.append(leftDiv, badgeDiv);
+                rolePermissionsChecklist.append(itemDiv);
+            });
+        }
+
+        refreshPermissionsChecklist();
+        roleInheritsContainer.off('change').on('change', '.role-inherit-chk', refreshPermissionsChecklist);
+
+        updateRoleLivePreview();
+        editRoleModal.modal('show');
+    }
+
+    // Role Form Submit (Save / Edit)
+    roleForm.submit(function (e) {
+        e.preventDefault();
+        if (!currentUserPermissions.canManageRoles) {
+            alert('אין לך הרשאה לנהל רמות הרשאה.');
+            return;
+        }
+
+        var level = parseInt(roleInputId.val(), 10);
+        var name = (roleInputName.val() || '').trim();
+        var color = (roleInputColor.val() || '').trim();
+
+        if (!name) {
+            alert('יש להזין שם לרמת ההרשאה.');
+            return;
+        }
+
+        var isGod = (level === 1);
+        var isStd = (level === 0);
+
+        var selectedInherits = [];
+        var cycleErrors = [];
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+
+        roleInheritsContainer.find('.role-inherit-chk:checked').each(function () {
+            var val = parseInt($(this).val(), 10);
+            if (!isNaN(val) && val !== level && val !== 1) {
+                if (typeof RoleManager !== 'undefined' && RoleManager.wouldCreateCycle(level, val, allRoles)) {
+                    var pRole = allRoles[val] || {};
+                    cycleErrors.push(pRole.name || ('רמה ' + val));
+                } else {
+                    selectedInherits.push(val);
+                }
+            }
+        });
+
+        if (cycleErrors.length > 0) {
+            alert('שגיאה: זוהתה הורשה מעגלית (Circular Inheritance) עם הרמות הבאות:\n' + cycleErrors.join(', ') + '\nרמות אלו כבר מורישות מרמה זו ישירות או בעקיפין. ההורשה בוטלה עבורן.');
+            return;
+        }
+
+        var selectedPerms = [];
+        var availablePerms = (typeof RoleManager !== 'undefined') ? RoleManager.getAvailablePermissions() : [];
+        if (isGod) {
+            selectedPerms = ['access_admin', 'send_system_messages', 'modify_user_roles', 'manage_roles', 'delete_users'];
+        } else {
+            // Only direct permissions are saved; inherited permissions are dynamically resolved
+            selectedPerms = editingRoleDirectPerms.filter(function (p) {
+                return p && p !== 'undefined' && (availablePerms.length === 0 || availablePerms.some(function (ap) { return ap.id === p; }));
+            });
+        }
+
+        saveRoleBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm ml-1" role="status" aria-hidden="true"></span> שומר...');
+
+        var docData = {
+            level: level,
+            name: name,
+            color: color,
+            inheritsFrom: selectedInherits,
+            permissions: selectedPerms,
+            isStandard: isStd,
+            isSystemGod: isGod,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        db.collection('permissionLevels').doc(String(level)).set(docData, { merge: true })
+            .then(function () {
+                saveRoleBtn.prop('disabled', false).html('<i class="fas fa-save ml-1"></i> שמור רמת הרשאה');
+                editRoleModal.modal('hide');
+
+                if (typeof RoleManager !== 'undefined') {
+                    RoleManager.registerRole(docData);
+                    permissionLevelsMap = RoleManager.getAllRoles();
+                } else {
+                    permissionLevelsMap[level] = docData;
+                }
+
+                updateRoleFilterOptions();
+                renderRolesTable();
+                renderUsersTable();
+            })
+            .catch(function (err) {
+                saveRoleBtn.prop('disabled', false).html('<i class="fas fa-save ml-1"></i> שמור רמת הרשאה');
+                alert('שגיאה בשמירת רמת ההרשאה: ' + err.message);
+            });
+    });
+
+    // Open Delete Role Modal
+    function openDeleteRoleModal(role, userCount) {
+        if (!currentUserPermissions.canManageRoles) {
+            alert('אין לך הרשאה למחוק רמות הרשאה.');
+            return;
+        }
+        if (role.level === 1 || role.level === 0) {
+            alert('לא ניתן למחוק דרגת מערכת מובנית (מנהל מערכת / User).');
+            return;
+        }
+
+        roleToDelete = role;
+        deleteRoleModalId.text(role.level);
+        deleteRoleModalName.text(role.name || ('דרגה ' + role.level));
+        deleteRoleModalCount.text(userCount + ' משתמשים');
+
+        // Check if any other roles inherit from this role
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var inheritingRoles = [];
+        Object.keys(allRoles).forEach(function (k) {
+            var l = parseInt(k, 10);
+            if (l !== role.level) {
+                var r = allRoles[l];
+                if (r && Array.isArray(r.inheritsFrom)) {
+                    var inherits = r.inheritsFrom.some(function (pid) {
+                        return pid === role.level || String(pid) === String(role.level);
+                    });
+                    if (inherits) {
+                        inheritingRoles.push(r.name || ('רמה ' + l));
+                    }
+                }
+            }
+        });
+
+        if (inheritingRoles.length > 0) {
+            $('#delete-role-inheritors-row').removeClass('d-none');
+            $('#delete-role-modal-inheritors').text(inheritingRoles.length + ' (' + inheritingRoles.join(', ') + ')');
+        } else {
+            $('#delete-role-inheritors-row').addClass('d-none');
+        }
+
+        confirmDeleteRoleBtn.prop('disabled', false).html('<i class="fas fa-trash-alt ml-1"></i> מחק רמת הרשאה');
+        deleteRoleModal.modal('show');
+    }
+
+    // Confirm Delete Role
+    confirmDeleteRoleBtn.click(function () {
+        if (!roleToDelete) return;
+        if (!currentUserPermissions.canManageRoles) {
+            alert('אין לך הרשאה למחוק רמות הרשאה.');
+            return;
+        }
+
+        var targetLevel = roleToDelete.level;
+        confirmDeleteRoleBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm ml-1" role="status" aria-hidden="true"></span> מוחק...');
+
+        // 1. Reset all users currently with this level to 0 (User)
+        var affectedUsers = allUsers.filter(function (u) { return u.level === targetLevel; });
+        var batch = db.batch();
+
+        affectedUsers.forEach(function (u) {
+            batch.update(db.collection('users').doc(u.uid), { level: 0 });
+        });
+
+        // 2. Cascade-remove targetLevel from any other permission levels that inherit from it
+        var allRoles = (typeof RoleManager !== 'undefined') ? RoleManager.getAllRoles() : permissionLevelsMap;
+        var affectedRoles = [];
+        Object.keys(allRoles).forEach(function (key) {
+            var lvlNum = parseInt(key, 10);
+            if (lvlNum !== targetLevel) {
+                var r = allRoles[lvlNum];
+                if (r && Array.isArray(r.inheritsFrom)) {
+                    var hasInherit = r.inheritsFrom.some(function (pid) {
+                        return pid === targetLevel || String(pid) === String(targetLevel);
+                    });
+                    if (hasInherit) {
+                        var updatedInherits = r.inheritsFrom.filter(function (pid) {
+                            return pid !== targetLevel && String(pid) !== String(targetLevel);
+                        });
+                        affectedRoles.push({
+                            level: lvlNum,
+                            inheritsFrom: updatedInherits
+                        });
+                        var roleRef = db.collection('permissionLevels').doc(String(lvlNum));
+                        batch.update(roleRef, {
+                            inheritsFrom: updatedInherits,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                }
+            }
+        });
+
+        // 3. Delete role document from permissionLevels collection
+        var roleDocRef = db.collection('permissionLevels').doc(String(targetLevel));
+        batch.delete(roleDocRef);
+
+        batch.commit().then(function () {
+            deleteRoleModal.modal('hide');
+
+            // Update in-memory user levels
+            affectedUsers.forEach(function (u) { u.level = 0; });
+
+            // Remove targetLevel and cascade-remove inheritance in RoleManager & local map
+            if (typeof RoleManager !== 'undefined') {
+                RoleManager.removeRole(targetLevel);
+            }
+            delete permissionLevelsMap[targetLevel];
+            affectedRoles.forEach(function (ar) {
+                if (permissionLevelsMap[ar.level]) {
+                    permissionLevelsMap[ar.level].inheritsFrom = ar.inheritsFrom;
+                }
+            });
+
+            loadPermissionLevels().then(function () {
+                updateStats();
+                renderUsersTable();
+                var msg = 'רמת ההרשאה נמחקה בהצלחה.';
+                if (affectedRoles.length > 0) {
+                    msg += '\nההורשה מרמה זו הוסרה אוטומטית מ-' + affectedRoles.length + ' רמות הרשאה שהיו תלויות בה.';
+                }
+                alert(msg);
+                roleToDelete = null;
+            });
+        }).catch(function (err) {
+            confirmDeleteRoleBtn.prop('disabled', false).html('<i class="fas fa-trash-alt ml-1"></i> מחק רמת הרשאה');
+            alert('שגיאה במחיקת רמת ההרשאה: ' + err.message);
         });
     });
 
@@ -737,7 +1545,7 @@
                 row.addClass('selected');
             }
 
-            var avatarBg = (u.level === 1) ? '#e74a3b' : '#4e73df';
+            var avatarBg = (u.level === 1) ? '#d97706' : ((u.level === 0) ? '#4e73df' : '#4f46e5');
             var avatarLetter = u.username ? u.username.charAt(0).toUpperCase() : '?';
             var avatar = $('<div class="notify-user-avatar ml-2" style="background-color: ' + avatarBg + '"></div>').text(avatarLetter);
 
@@ -747,25 +1555,26 @@
                 RoleManager.applyRoleHover(nameSpan, u);
             } else if (u.level === 1) {
                 nameSpan.addClass('admin-golden-gradient');
-            } else if (u.level === 2) {
-                nameSpan.addClass('role-atmosphere-gradient');
+            } else {
+                nameSpan.addClass('user-name-standard');
             }
-            var nameDiv = $('<div class="small font-weight-bold"></div>').append(nameSpan);
-            if (currentUser && currentUser.uid === u.uid) {
-                nameDiv.append(' <span class="badge badge-light border text-muted small">(אתה)</span>');
-            }
-            var emailDiv = $('<div class="small text-muted"></div>').text(u.email || 'ללא דוא״ל');
-            userMeta.append(nameDiv, emailDiv);
 
+            userMeta.append($('<div class="font-weight-bold small"></div>').append(nameSpan));
+            if (u.email) {
+                userMeta.append($('<small class="text-muted d-block"></small>').text(u.email));
+            }
             leftFlex.append(chk, avatar, userMeta);
 
-            var rightBadges = $('<div class="d-flex align-items-center"></div>');
-            var roleBadge = $('<span class="badge mr-1 ' + (u.level === 1 ? 'badge-role-admin' : 'badge-role-user') + '" style="font-size: 0.7rem;"></span>')
-                .text(u.level === 1 ? 'admin' : 'user');
-            rightBadges.append(roleBadge);
+            var roleBadgeClass = (u.level === 1) ? 'badge-role-system-god' : ((u.level === 0) ? 'badge-role-user' : 'badge-role-custom');
+            var rName = (typeof RoleManager !== 'undefined' ? (RoleManager.getRoleName ? RoleManager.getRoleName(u.level) : RoleManager.getRoleSystemName(u.level)) : '') || (u.level === 1 ? 'מנהל מערכת' : 'User');
+            var rightBadge = $('<span class="badge ' + roleBadgeClass + '"></span>').text(rName + ' (' + u.level + ')');
 
-            row.append(leftFlex, rightBadges);
-
+            row.append(leftFlex, rightBadge);
+            row.click(function (e) {
+                if (e.target.tagName !== 'INPUT') {
+                    chk.prop('checked', !chk.prop('checked')).trigger('change');
+                }
+            });
             chk.change(function () {
                 if ($(this).is(':checked')) {
                     row.addClass('selected');
@@ -775,12 +1584,6 @@
                 updateSelectedUsersCount();
             });
 
-            row.click(function (e) {
-                if (e.target.tagName.toLowerCase() !== 'input') {
-                    chk.prop('checked', !chk.is(':checked')).trigger('change');
-                }
-            });
-
             notifyUsersChecklist.append(row);
         });
 
@@ -788,91 +1591,100 @@
     }
 
     notifyUserSearch.on('input', function () {
-        var q = ($(this).val() || '').trim().toLowerCase();
+        var q = $(this).val().trim().toLowerCase();
         notifyUsersChecklist.find('.notify-user-row').each(function () {
-            var r = $(this);
-            var uName = r.attr('data-username') || '';
-            var uEmail = r.attr('data-email') || '';
-            var uUid = r.attr('data-uid') || '';
-            if (!q || uName.indexOf(q) !== -1 || uEmail.indexOf(q) !== -1 || uUid.indexOf(q) !== -1) {
-                r.removeClass('d-none');
+            var row = $(this);
+            if (!q) {
+                row.removeClass('d-none');
+                return;
+            }
+            var uName = row.attr('data-username') || '';
+            var uMail = row.attr('data-email') || '';
+            var uUid = row.attr('data-uid') || '';
+            if (uName.indexOf(q) !== -1 || uMail.indexOf(q) !== -1 || uUid.indexOf(q) !== -1) {
+                row.removeClass('d-none');
             } else {
-                r.addClass('d-none');
+                row.addClass('d-none');
             }
         });
     });
 
     notifySelectAllBtn.click(function () {
-        notifyUsersChecklist.find('.notify-user-row:not(.d-none) .notify-user-chk').prop('checked', true).trigger('change');
+        notifyUsersChecklist.find('.notify-user-row:not(.d-none) .notify-user-chk').prop('checked', true);
+        notifyUsersChecklist.find('.notify-user-row:not(.d-none)').addClass('selected');
+        updateSelectedUsersCount();
     });
 
     notifyDeselectAllBtn.click(function () {
-        notifyUsersChecklist.find('.notify-user-chk').prop('checked', false).trigger('change');
+        notifyUsersChecklist.find('.notify-user-chk').prop('checked', false);
+        notifyUsersChecklist.find('.notify-user-row').removeClass('selected');
+        updateSelectedUsersCount();
     });
 
     $('input[name="notifyTargetMode"]').change(function () {
-        var mode = $(this).val();
+        var mode = $('input[name="notifyTargetMode"]:checked').val();
         if (mode === 'broadcast') {
             notifyBroadcastInfo.removeClass('d-none');
             notifySpecificContainer.addClass('d-none');
         } else {
             notifyBroadcastInfo.addClass('d-none');
             notifySpecificContainer.removeClass('d-none');
-            updateSelectedUsersCount();
         }
     });
 
     function updateNotificationPreview() {
-        var text = notifyMessageText.val() || '';
-        var sender = notifySenderName.val() || 'מערכת CheeseMate';
         var type = notifyTypeSelect.val();
-
-        notifyCharCounter.text(text.length);
-        if (text.length > 500) {
-            notifyCharCounter.addClass('text-danger font-weight-bold');
-        } else {
-            notifyCharCounter.removeClass('text-danger font-weight-bold');
-        }
+        var sender = notifySenderName.val().trim() || 'מערכת CheeseMate';
+        var msg = notifyMessageText.val().trim() || '(תוכן ההודעה יוצג כאן...)';
 
         notifyPreviewSender.text(sender);
-        notifyPreviewMsg.text(text || '(תוכן ההודעה יוצג כאן...)');
+        notifyPreviewMsg.text(msg);
+        notifyCharCounter.text(notifyMessageText.val().length);
+
+        var badgeText = 'מערכת';
+        var badgeClass = 'badge-warning text-dark';
+        var iconHtml = '<i class="fas fa-bullhorn text-warning fa-lg"></i>';
 
         if (type === 'update') {
-            notifyPreviewIcon.html('<i class="fas fa-star text-info fa-lg"></i>');
-            notifyPreviewBadge.text('עדכון').removeClass('badge-warning text-dark badge-danger').addClass('badge-info text-white');
+            badgeText = 'עדכון';
+            badgeClass = 'badge-primary text-white';
+            iconHtml = '<i class="fas fa-sparkles text-primary fa-lg"></i>';
         } else if (type === 'alert') {
-            notifyPreviewIcon.html('<i class="fas fa-exclamation-circle text-danger fa-lg"></i>');
-            notifyPreviewBadge.text('התראה').removeClass('badge-warning text-dark badge-info').addClass('badge-danger text-white');
-        } else {
-            notifyPreviewIcon.html('<i class="fas fa-bullhorn text-warning fa-lg"></i>');
-            notifyPreviewBadge.text('מערכת').removeClass('badge-info text-white badge-danger').addClass('badge-warning text-dark');
+            badgeText = 'התראה';
+            badgeClass = 'badge-danger text-white';
+            iconHtml = '<i class="fas fa-exclamation-triangle text-danger fa-lg"></i>';
         }
+
+        notifyPreviewBadge.text(badgeText).attr('class', 'badge ml-2 ' + badgeClass);
+        notifyPreviewIcon.html(iconHtml);
     }
 
-    notifyMessageText.on('input', updateNotificationPreview);
-    notifySenderName.on('input', updateNotificationPreview);
     notifyTypeSelect.change(updateNotificationPreview);
+    notifySenderName.on('input', updateNotificationPreview);
+    notifyMessageText.on('input', updateNotificationPreview);
 
-    function openSendNotificationModal(preselectedUid) {
-        notifyBroadcastCount.text(allUsers.length);
-        notifyMessageText.val('');
+    function openSendNotificationModal(targetUid) {
+        if (!currentUserPermissions.canSendNotifications) {
+            alert('אין לך הרשאה לשליחת הודעות מערכת.');
+            return;
+        }
+
+        notifyForm[0].reset();
         notifySenderName.val('מערכת CheeseMate');
         notifyTypeSelect.val('system');
         notifySendPush.prop('checked', true);
         notifyProgressBox.addClass('d-none');
-        notifyProgressBar.css('width', '0%');
-        notifyProgressPercent.text('0%');
-        notifyResultAlert.addClass('d-none').removeClass('alert-success alert-danger').text('');
+        notifyResultAlert.addClass('d-none').text('');
         notifySubmitBtn.prop('disabled', false).html('<i class="fas fa-paper-plane ml-1"></i> שלח הודעה');
         notifyCancelBtn.prop('disabled', false);
+        notifyBroadcastCount.text(allUsers.length);
 
-        populateUsersChecklist(preselectedUid);
-
-        if (preselectedUid) {
+        if (targetUid) {
             notifyRadioSpecific.prop('checked', true).trigger('change');
+            populateUsersChecklist(targetUid);
         } else {
-            // Default to broadcast as requested
             notifyRadioBroadcast.prop('checked', true).trigger('change');
+            populateUsersChecklist(null);
         }
 
         updateNotificationPreview();
@@ -885,25 +1697,14 @@
 
     notifyForm.submit(function (e) {
         e.preventDefault();
-
-        var msg = (notifyMessageText.val() || '').trim();
-        if (!msg) {
-            alert('אנא הזינו תוכן להודעה.');
-            notifyMessageText.focus();
-            return;
-        }
-        if (msg.length > 500) {
-            alert('תוכן ההודעה ארוך מדי (מקסימום 500 תווים).');
-            notifyMessageText.focus();
+        if (!currentUserPermissions.canSendNotifications) {
+            alert('אין לך הרשאה לשליחת הודעות מערכת.');
             return;
         }
 
-        var sender = (notifySenderName.val() || '').trim() || 'מערכת CheeseMate';
-        var type = notifyTypeSelect.val() || 'system';
-        var shouldSendPush = notifySendPush.is(':checked');
         var targetMode = $('input[name="notifyTargetMode"]:checked').val();
-
         var targetUids = [];
+
         if (targetMode === 'broadcast') {
             targetUids = allUsers.map(function (u) { return u.uid; });
         } else {
@@ -913,69 +1714,79 @@
         }
 
         if (targetUids.length === 0) {
-            alert('יש לבחור לפחות נמען אחד להודעה.');
+            alert('יש לבחור לפחות משתמש אחד לקבלת ההודעה.');
             return;
         }
 
-        // UI state: sending
+        var senderName = notifySenderName.val().trim() || 'מערכת CheeseMate';
+        var notifType = notifyTypeSelect.val() || 'system';
+        var message = notifyMessageText.val().trim();
+        var sendPush = notifySendPush.is(':checked');
+
+        if (!message) {
+            alert('יש להזין תוכן להודעה.');
+            return;
+        }
+
         notifySubmitBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm ml-1" role="status" aria-hidden="true"></span> שולח...');
         notifyCancelBtn.prop('disabled', true);
         notifyProgressBox.removeClass('d-none');
-        notifyResultAlert.addClass('d-none');
-        notifyProgressBar.css('width', '15%');
-        notifyProgressPercent.text('15%');
-        notifyProgressLabel.text('שומר התראות במסד הנתונים...');
+        notifyResultAlert.addClass('d-none').text('');
+        notifyProgressBar.css('width', '10%');
+        notifyProgressPercent.text('10%');
+        notifyProgressLabel.text('כותב התראות ב-Firestore...');
 
-        // 1. Commit notifications to Firestore in chunks of 400
-        var now = Date.now();
-        var chunks = [];
-        for (var i = 0; i < targetUids.length; i += 400) {
-            chunks.push(targetUids.slice(i, i + 400));
+        var notifDocData = {
+            type: notifType,
+            fromUid: currentUser ? currentUser.uid : 'system',
+            fromUsername: senderName,
+            fromLevel: currentUserLevel,
+            fromRole: (currentUserLevel === 1 ? 'מנהל מערכת' : 'admin'),
+            message: message,
+            timestamp: Date.now(),
+            read: false
+        };
+
+        var BATCH_SIZE = 450;
+        var batchPromises = [];
+        var totalBatches = Math.ceil(targetUids.length / BATCH_SIZE);
+
+        for (var b = 0; b < totalBatches; b++) {
+            var chunk = targetUids.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            var writeBatch = db.batch();
+            chunk.forEach(function (uId) {
+                var docRef = db.collection('users').doc(uId).collection('notifications').doc();
+                writeBatch.set(docRef, notifDocData);
+            });
+            batchPromises.push(writeBatch.commit());
         }
 
-        var firestorePromises = chunks.map(function (chunk) {
-            var batch = db.batch();
-            chunk.forEach(function (tUid) {
-                var notifRef = db.collection('users').doc(tUid).collection('notifications').doc();
-                batch.set(notifRef, {
-                    type: type,
-                    fromUid: currentUser ? currentUser.uid : 'admin',
-                    fromUsername: sender,
-                    message: msg,
-                    timestamp: now,
-                    read: false
-                });
-            });
-            return batch.commit();
-        });
+        Promise.all(batchPromises).then(function () {
+            notifyProgressBar.css('width', '50%');
+            notifyProgressPercent.text('50%');
+            notifyProgressLabel.text('התראות נשמרו ב-Firestore. שולח Web Push...');
 
-        Promise.all(firestorePromises).then(function () {
-            notifyProgressBar.css('width', shouldSendPush ? '50%' : '100%');
-            notifyProgressPercent.text(shouldSendPush ? '50%' : '100%');
-
-            if (!shouldSendPush) {
-                return { pushSent: 0 };
+            if (!sendPush) {
+                return Promise.resolve();
             }
 
-            notifyProgressLabel.text('שולח התראות Push למכשירים רשומים...');
-
-            var pushWorkerUrl = (typeof NotificationsManager !== 'undefined' && NotificationsManager.WORKER_URL) ?
-                NotificationsManager.WORKER_URL : 'https://cheesemate-push.yuvalkalan.workers.dev';
+            var pushPayload = {
+                title: senderName,
+                body: message,
+                icon: '/icons/icon-192x192.png',
+                badge: '/icons/badge-72x72.png',
+                tag: 'system-broadcast-' + Date.now(),
+                url: '/'
+            };
 
             var pushPromises = targetUids.map(function (tUid, idx) {
-                return fetch(pushWorkerUrl + '/send', {
+                return fetch('https://cheesemate-notifications.yuvalkalan.workers.dev/api/send-push', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        targetUid: tUid,
-                        title: sender,
-                        body: msg,
-                        icon: '/icons/android-chrome-192x192.png',
-                        badge: '/icons/favicon-32x32.png',
-                        url: '/'
+                        userId: tUid,
+                        notification: pushPayload
                     })
-                }).then(function (res) {
-                    return res.json();
                 }).catch(function (err) {
                     console.warn('Push error for ' + tUid, err);
                     return null;
