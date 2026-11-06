@@ -14,7 +14,7 @@ rules_version = '2';
 //   - username: string or null (optional, max 200 chars) - user's chosen username in Personal Area
 //   - usernameLower: string or null (optional, max 200 chars) - lowercase username for case-insensitive lookup
 //   - email: string or null (optional, max 254 chars) - user's email address for friend lookup
-//   - level: number (optional, 0 = user, 1 = admin, 2 = atmosphere) - user authorization level
+//   - level: number (optional, 0 = user, 1 = admin, 2+ = dynamic permission levels) - user authorization level
 //   - friends: list of strings (optional, max 500 items) - UIDs of accepted friends
 //   - incomingRequests: list of strings (optional, max 500 items) - UIDs of users who sent a friend request
 //   - outgoingRequests: list of strings (optional, max 500 items) - UIDs of users to whom a friend request was sent
@@ -123,9 +123,21 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level == 1;
     }
 
-    // Ensure permission level is not modified by non-admin users on update
+    // Check if the caller is an Administrator or has the 'modify_user_roles' permission
+    function canModifyUserRoles() {
+      return isAdmin() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        'level' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+        exists(/databases/$(database)/documents/permissionLevels/$(string(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level))) &&
+        'permissions' in get(/databases/$(database)/documents/permissionLevels/$(string(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level))).data &&
+        get(/databases/$(database)/documents/permissionLevels/$(string(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level))).data.permissions.hasAny(['modify_user_roles'])
+      );
+    }
+
+    // Ensure permission level is not modified by unauthorized users on update
     function isLevelUnchangedForNonAdmin() {
-      return isAdmin() ||
+      return isAdmin() || canModifyUserRoles() ||
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
         (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0));
     }
@@ -175,7 +187,7 @@ service cloud.firestore {
          data.email == null ||
          (data.email is string && data.email.size() <= 254)) &&
         (!('level' in data) ||
-         (data.level is number && (data.level == 0 || data.level == 1 || data.level == 2))) &&
+         (data.level is number && data.level >= 0 && data.level <= 100000 && int(data.level) == data.level)) &&
         (!('friends' in data) ||
          (data.friends is list && data.friends.size() <= 500)) &&
         (!('incomingRequests' in data) ||
@@ -308,10 +320,20 @@ service cloud.firestore {
 
       allow update: if (
         isAdmin() ||
-        (isOwner(userId) && isLevelUnchangedForNonAdmin()) ||
+        (
+          canModifyUserRoles() &&
+          !isOwner(userId) &&
+          (!('level' in resource.data) || resource.data.level != 1) &&
+          (!('level' in request.resource.data) || request.resource.data.level != 1)
+        ) ||
+        (isOwner(userId) && isLevelUnchangedForNonAdmin() &&
+         (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
+          (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0)))) ||
         (isAuthenticated() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']))
-      ) && isValidUserDoc(request.resource.data);
+      ) && isValidUserDoc(request.resource.data) &&
+      (isAdmin() || (!('level' in resource.data) || resource.data.level != 1)) &&
+      (isAdmin() || (!('level' in request.resource.data) || request.resource.data.level != 1));
 
       allow delete: if isOwner(userId) || isAdmin();
 
