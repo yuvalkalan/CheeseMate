@@ -4,3 +4,6 @@ firebase-debug.log
 .wrangler/
 backups/
 .env
+.env.*
+.dev.vars
+.dev.vars.*

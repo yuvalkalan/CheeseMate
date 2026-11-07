@@ -111,7 +111,7 @@ graph LR
     FCM -- "Deliver Push Notification" --> Browser
 ```
 
-1. **VAPID Public Key Registration:** Browser requests registration via `/sw.js` with public key `BKg-LrqshpQPZ...`.
+1. **VAPID Public Key Registration:** Browser requests registration via `/sw.js` with the configured VAPID public key.
 2. **Subscription Storage:** Worker persists up to 10 active endpoints per user in Cloudflare KV under the key `user:{uid}`.
 3. **Push Dispatch:** When an event occurs (friend request accepted, admin announcement), the client or backend triggers `POST /send` on the worker with `targetUid`, which retrieves the subscription from KV, encrypts the payload using `@block65/webcrypto-web-push`, and delivers it to the device push gateway.
 

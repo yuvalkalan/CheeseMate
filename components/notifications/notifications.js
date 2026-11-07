@@ -4,7 +4,7 @@
 
 // eslint-disable-next-line no-unused-vars
 var NotificationsManager = (function () {
-    var VAPID_PUBLIC_KEY = 'BKg-LrqshpQPZ-hamsMkdCoo7ABvSFbBZpHcnlkYqpqRJ4M8UdI9WBqd79fL7YnIr0PbyKdaHhI-uSAhY4mL7hs';
+    var VAPID_PUBLIC_KEY = 'BOCn2d0rwodFPUbbYeUkesE8Yf094LrDT_linSMfwLq2HCfwoKgKy7RGQNEaB8AenGe1aejtB6gOwqQEg-WVrvk';
     var WORKER_URL = 'https://cheesemate-push.yuvalkalan.workers.dev';
 
     function urlBase64ToUint8Array(base64String) {

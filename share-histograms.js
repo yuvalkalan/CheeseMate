@@ -251,14 +251,16 @@ let cheeseforkShareHistograms = function () {
         }
 
         function getGithubToken() {
-            const tokens = [
-                atob('Y2ViMTY5ZWM2YzAyYzY5ZDVmOTk2NjA5MmVkZWZkOTRiZGY2YjI2Yw=='),
-                atob('NTNjNzA3MDc2NzM5MDJkYjI5ZGMzZTkxN2JlODdmNWI4YTMzZDdjNg=='),
-                atob('MTA4MjQxYTJkYmNkYmZkZDQ2YWI0NDliZTJkZTVmMTYxZGZiZThhZQ=='),
-                atob('NTllNTJhNTg1NTZiMWEzZjJmYmZjZjYyMjU3ZGM0OGY1YWQwY2ZkZg=='),
-                atob('OWE4MmYzNjMwZjBlODQ1MWE2MDkwZjZhNjlkOWU3ZGQ4YmQ4MmYyYg==')
-            ];
-            return tokens[Math.floor(Math.random() * tokens.length)];
+            if (typeof window !== 'undefined' && window.HISTOGRAMS_GITHUB_TOKEN) {
+                return window.HISTOGRAMS_GITHUB_TOKEN;
+            }
+            try {
+                var stored = localStorage.getItem('histograms_github_token');
+                if (stored) return stored;
+            } catch (e) {
+                // Ignore storage errors
+            }
+            return '';
         }
 
         async function getGitFileSha(path, filename, token) {
@@ -267,11 +269,11 @@ let cheeseforkShareHistograms = function () {
                 '?t=' + Date.now();
 
             const response = await fetch(url, {
-                headers: {
+                headers: token ? {
                     // Rate limiting: Authenticated requests get a higher rate limit.
                     // https://developer.github.com/v3/#rate-limiting
                     'Authorization': 'token ' + token
-                }
+                } : {}
             });
             if (response.status === 200) {
                 const data = await response.json();
@@ -343,7 +345,7 @@ let cheeseforkShareHistograms = function () {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json; charset=utf-8',
-                    'Authorization': 'token ' + token
+                    ...(token ? { 'Authorization': 'token ' + token } : {})
                 },
                 body: JSON.stringify(data)
             });

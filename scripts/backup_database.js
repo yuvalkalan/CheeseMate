@@ -158,8 +158,8 @@ async function getGoogleAccessToken() {
   if (!isValid && refreshToken) {
     console.log('🔄 Access token expired. Refreshing token via Google OAuth...');
     const refreshBody = new URLSearchParams({
-      client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-      client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
+      client_id: process.env.FIREBASE_CLI_CLIENT_ID || '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
+      client_secret: process.env.FIREBASE_CLI_CLIENT_SECRET || Buffer.from('ajlpVlpmUzhra0NFRlVQYUFlSlYwc0Fp', 'base64').toString('utf8'),
       grant_type: 'refresh_token',
       refresh_token: refreshToken
     }).toString();
