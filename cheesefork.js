@@ -16,7 +16,7 @@
     var stopScheduleWatching = null;
     var stopCourseStudentCountsWatching = null;
     var lastSemesterDocsSnapshot = null;
-    var currentSavedSession = null, savedSessionForUndo = null, savedSessionForRedo = null;
+    var currentSavedSession = {}, savedSessionForUndo = null, savedSessionForRedo = null;
     var ownSavedSession = null;
     var metadataDiff = {};
 
@@ -52,16 +52,22 @@
             courseSelect = new CourseSelect($('#course-select'), {
                 courseManager: courseManager,
                 onItemAdd: function (course) {
-                    if (!courseButtonList.isCourseInList(course)) {
-                        courseButtonList.addCourse(course);
-                        courseCalendar.addCourse(course);
-                        selectedCourseSave(course);
-                        updateGeneralInfoLine();
-                        courseExamInfo.renderCourses(courseButtonList.getCourseNumbers(true));
-                        // Can't apply filter inside onItemAdd since it changes the select contents.
-                        setTimeout(function () {
-                            courseSelect.filterApply();
-                        }, 0);
+                    try {
+                        if (!courseButtonList.isCourseInList(course)) {
+                            courseButtonList.addCourse(course);
+                            courseCalendar.addCourse(course);
+                            selectedCourseSave(course);
+                            updateGeneralInfoLine();
+                            courseExamInfo.renderCourses(courseButtonList.getCourseNumbers(true));
+                            // Can't apply filter inside onItemAdd since it changes the select contents.
+                            setTimeout(function () {
+                                if (courseSelect && typeof courseSelect.filterApply === 'function') {
+                                    courseSelect.filterApply();
+                                }
+                            }, 0);
+                        }
+                    } catch (err) {
+                        console.error('Error adding course:', err);
                     }
                 },
                 onDropdownItemActivate: function (course) {
@@ -965,9 +971,11 @@
     }
 
     function firebaseInit() {
+        var isHostingDomain = (typeof window !== 'undefined' && window.location &&
+            (window.location.hostname === 'cheesemate-yk.web.app' || window.location.hostname === 'cheesemate-yk.firebaseapp.com'));
         var config = {
             apiKey: 'AIzaSyC7leQH8fYdT_ycbYsezVXSSYgtK1wBOEU',
-            authDomain: 'cheesemate-yk.firebaseapp.com',
+            authDomain: isHostingDomain ? window.location.hostname : 'cheesemate-yk.firebaseapp.com',
             appId: '1:215004619874:web:2049a06ba5c2aa95fd1d3b',
             projectId: 'cheesemate-yk',
             storageBucket: 'cheesemate-yk.firebasestorage.app',
@@ -985,8 +993,9 @@
         personalArea = new PersonalArea({
             firestoreDb: firestoreDb,
             onBeforeAccountDelete: function () {
-                if (stopScheduleWatching) {
+                if (typeof stopScheduleWatching === 'function') {
                     stopScheduleWatching();
+                    stopScheduleWatching = null;
                 }
                 if (stopCourseStudentCountsWatching) {
                     stopCourseStudentCountsWatching();
@@ -1235,13 +1244,16 @@
             callbacks: {
                 // Called when the user has been successfully signed in.
                 signInSuccessWithAuthResult: function (authResult) {
-                    if (authResult.user) {
-                        loginDialog.close();
+                    if (authResult.user && loginDialog) {
+                        try {
+                            loginDialog.close();
+                        } catch (e) {}
                     }
                     // Do not redirect.
                     return false;
                 }
             },
+            signInSuccessUrl: window.location.href,
             // Terms of service url.
             //tosUrl: 'https://policies.google.com/terms',
             // Privacy policy url.
@@ -1265,14 +1277,20 @@
             } else if (user) {
                 // Slow reload.
                 $('#page-loader').show();
-                stopScheduleWatching();
+                if (typeof stopScheduleWatching === 'function') {
+                    stopScheduleWatching();
+                    stopScheduleWatching = null;
+                }
                 resetSchedule();
                 watchSavedSchedule(function () {
                     $('#page-loader').hide();
                 });
             } else {
                 // Fast reload.
-                stopScheduleWatching();
+                if (typeof stopScheduleWatching === 'function') {
+                    stopScheduleWatching();
+                    stopScheduleWatching = null;
+                }
                 resetSchedule();
                 watchSavedSchedule(function () {});
             }
@@ -1408,32 +1426,36 @@
         var semesterCoursesKey = currentSemester + '_courses';
         var courseKey = currentSemester + '_' + course;
 
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[semesterCoursesKey] = currentSavedSession[semesterCoursesKey] || [];
+
         // Keep all of the items from currentSavedSession[semesterCoursesKey], even if there
         // are numbers of courses which don't exist anymore. Use the button list for the order.
         var courseNumbers = courseButtonList.getCourseNumbers(true);
         currentSavedSession[semesterCoursesKey] = courseNumbers.concat(
             $(currentSavedSession[semesterCoursesKey]).not(courseNumbers).get());
-        currentSavedSession[courseKey] = {};
+        currentSavedSession[courseKey] = currentSavedSession[courseKey] || {};
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
             input[semesterCoursesKey] = currentSavedSession[semesterCoursesKey];
-            input[courseKey] = {};
+            input[courseKey] = currentSavedSession[courseKey];
             if (metadataUpdate) {
                 input[metadataCourseKey] = courseData;
             }
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
-                localStorage.removeItem(courseKey);
-                if (metadataUpdate) {
-                    localStorage.setItem(metadataCourseKey, JSON.stringify(courseData));
-                }
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore selectedCourseSave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
+            localStorage.setItem(courseKey, JSON.stringify(currentSavedSession[courseKey]));
+            if (metadataUpdate) {
+                localStorage.setItem(metadataCourseKey, JSON.stringify(courseData));
             }
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1443,6 +1465,8 @@
         // Save only the course order when reordering via drag-and-drop
         var semesterCoursesKey = currentSemester + '_courses';
         var courseNumbers = courseButtonList.getCourseNumbers(true);
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[semesterCoursesKey] = currentSavedSession[semesterCoursesKey] || [];
         currentSavedSession[semesterCoursesKey] = courseNumbers.concat(
             $(currentSavedSession[semesterCoursesKey]).not(courseNumbers).get());
 
@@ -1450,13 +1474,14 @@
         if (doc) {
             var input = {};
             input[semesterCoursesKey] = currentSavedSession[semesterCoursesKey];
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore coursesOrderSave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1468,7 +1493,8 @@
         var semesterCoursesKey = currentSemester + '_courses';
         var courseKey = currentSemester + '_' + course;
 
-        currentSavedSession[semesterCoursesKey] = currentSavedSession[semesterCoursesKey].filter(function (item) {
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[semesterCoursesKey] = (currentSavedSession[semesterCoursesKey] || []).filter(function (item) {
             return item !== course;
         });
         delete currentSavedSession[courseKey];
@@ -1479,15 +1505,16 @@
             input[semesterCoursesKey] = firebase.firestore.FieldValue.arrayRemove(course);
             input[courseKey] = firebase.firestore.FieldValue.delete();
             input[metadataCourseKey] = firebase.firestore.FieldValue.delete();
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
-                localStorage.removeItem(courseKey);
-                localStorage.removeItem(metadataCourseKey);
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore selectedCourseUnsave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(semesterCoursesKey, JSON.stringify(currentSavedSession[semesterCoursesKey]));
+            localStorage.removeItem(courseKey);
+            localStorage.removeItem(metadataCourseKey);
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1501,19 +1528,22 @@
     function selectedLessonSave(course, lessonNumber, lessonType) {
         var courseKey = currentSemester + '_' + course;
 
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[courseKey] = currentSavedSession[courseKey] || {};
         currentSavedSession[courseKey][lessonType] = lessonNumber;
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
             input[courseKey + '.' + lessonType] = lessonNumber;
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(courseKey, JSON.stringify(currentSavedSession[courseKey]));
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore selectedLessonSave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(courseKey, JSON.stringify(currentSavedSession[courseKey]));
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1522,19 +1552,22 @@
     function selectedLessonUnsave(course, lessonNumber, lessonType) {
         var courseKey = currentSemester + '_' + course;
 
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[courseKey] = currentSavedSession[courseKey] || {};
         delete currentSavedSession[courseKey][lessonType];
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
             input[courseKey + '.' + lessonType] = firebase.firestore.FieldValue.delete();
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(courseKey, JSON.stringify(currentSavedSession[courseKey]));
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore selectedLessonUnsave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(courseKey, JSON.stringify(currentSavedSession[courseKey]));
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1543,19 +1576,22 @@
     function customEventSave(eventId, eventData) {
         var semesterCustomEventsKey = currentSemester + '_custom_events';
 
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[semesterCustomEventsKey] = currentSavedSession[semesterCustomEventsKey] || {};
         currentSavedSession[semesterCustomEventsKey][eventId] = eventData;
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
             input[semesterCustomEventsKey + '.' + eventId] = eventData;
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(semesterCustomEventsKey, JSON.stringify(currentSavedSession[semesterCustomEventsKey]));
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore customEventSave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(semesterCustomEventsKey, JSON.stringify(currentSavedSession[semesterCustomEventsKey]));
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1564,19 +1600,22 @@
     function customEventUnsave(eventId) {
         var semesterCustomEventsKey = currentSemester + '_custom_events';
 
+        currentSavedSession = currentSavedSession || {};
+        currentSavedSession[semesterCustomEventsKey] = currentSavedSession[semesterCustomEventsKey] || {};
         delete currentSavedSession[semesterCustomEventsKey][eventId];
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
             input[semesterCustomEventsKey + '.' + eventId] = firebase.firestore.FieldValue.delete();
-            doc.update(input);
-        } else {
-            try {
-                localStorage.setItem(semesterCustomEventsKey, JSON.stringify(currentSavedSession[semesterCustomEventsKey]));
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore customEventUnsave failed:', err);
+            });
+        }
+        try {
+            localStorage.setItem(semesterCustomEventsKey, JSON.stringify(currentSavedSession[semesterCustomEventsKey]));
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         onSavedSessionChange();
@@ -1638,7 +1677,7 @@
             return;
         }
 
-        if (stopScheduleWatching) {
+        if (typeof stopScheduleWatching === 'function') {
             stopScheduleWatching();
             stopScheduleWatching = null;
         }
@@ -1711,7 +1750,7 @@
             return;
         }
 
-        if (stopScheduleWatching) {
+        if (typeof stopScheduleWatching === 'function') {
             stopScheduleWatching();
             stopScheduleWatching = null;
         }
@@ -1761,8 +1800,21 @@
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var firstDataLoaded = false;
+            var loadSafetyTimer = setTimeout(function () {
+                if (!firstDataLoaded) {
+                    firstDataLoaded = true;
+                    if (!currentSavedSession || Object.keys(currentSavedSession).length === 0) {
+                        currentSavedSession = savedSessionFromLocalStorage() || {};
+                        setScheduleFromSavedSession(currentSavedSession, false);
+                    }
+                    onSavedSessionReset();
+                    if (typeof onLoadedFunc === 'function') {
+                        onLoadedFunc();
+                    }
+                }
+            }, 7000);
 
-            stopScheduleWatching = doc.onSnapshot(function (result) {
+            var unsub = doc.onSnapshot(function (result) {
                 if (result.metadata.hasPendingWrites) {
                     // The callback was called as a result of a local change, ignore it.
                     // https://stackoverflow.com/questions/50186413/is-firestore-onsnapshot-update-event-due-to-local-client-set
@@ -1773,21 +1825,44 @@
                     return;
                 }
 
+                clearTimeout(loadSafetyTimer);
+
                 if (!firstDataLoaded) {
                     // Save name in server for sharing purposes.
                     // Note: Setting displayName serves two purposes, saving the
                     // name and actually creating the document for the semester
                     // if it doesn't exist yet. So set it even if it's null.
-                    if (personalArea && personalArea.userDocData && personalArea.userDocData.username) {
-                        doc.set({ displayName: personalArea.userDocData.username }, { merge: true });
-                    } else if (!result.exists || !result.data().displayName) {
-                        var initialDisplayName = (personalArea && personalArea.getCurrentUsername()) ||
-                            (firebase.auth().currentUser.email ? firebase.auth().currentUser.email.split('@')[0] : firebase.auth().currentUser.displayName);
-                        doc.set({ displayName: initialDisplayName }, { merge: true });
+                    var initialDisplayName = (personalArea && personalArea.userDocData && personalArea.userDocData.username) ||
+                        (personalArea && personalArea.getCurrentUsername()) ||
+                        (firebase.auth().currentUser && firebase.auth().currentUser.email ? firebase.auth().currentUser.email.split('@')[0] : (firebase.auth().currentUser && firebase.auth().currentUser.displayName)) ||
+                        'משתמש';
+                    if (!result.exists || !result.data() || !result.data().displayName) {
+                        doc.set({ displayName: initialDisplayName }, { merge: true }).catch(function () {});
                     }
                 }
 
                 var session = savedSessionFromFirestoreData(result.exists ? result.data() : {});
+                var semesterCoursesKey = currentSemester + '_courses';
+
+                // Safety guard against race conditions:
+                // If remote snapshot is empty or doesn't exist, but user already has courses (e.g. from localStorage or added recently)
+                if (!result.exists || !session[semesterCoursesKey] || session[semesterCoursesKey].length === 0) {
+                    var localSession = savedSessionFromLocalStorage();
+                    var currentCoursesInUI = courseButtonList.getCourseNumbers(true);
+
+                    if (currentCoursesInUI && currentCoursesInUI.length > 0) {
+                        // User already has courses on screen (e.g. added before snapshot or from fallback), don't wipe them!
+                        session = currentSavedSession || localSession || session;
+                        if (session && session[semesterCoursesKey] && session[semesterCoursesKey].length > 0) {
+                            doc.set(session, { merge: true }).catch(function () {});
+                        }
+                    } else if (localSession && localSession[semesterCoursesKey] && localSession[semesterCoursesKey].length > 0 && !result.exists) {
+                        // Document doesn't exist in Firestore, but localStorage has saved schedule - migrate it!
+                        session = localSession;
+                        doc.set(session, { merge: true }).catch(function () {});
+                    }
+                }
+
                 setScheduleFromSavedSession(session, !firstDataLoaded);
 
                 if (shouldEnableMetadataDiff()) {
@@ -1803,13 +1878,26 @@
                 if (!firstDataLoaded) {
                     onSavedSessionReset();
                     firstDataLoaded = true;
-                    onLoadedFunc();
+                    if (typeof onLoadedFunc === 'function') {
+                        onLoadedFunc();
+                    }
                 } else {
                     onSavedSessionChange();
                 }
             }, function (error) {
-                alert('Error loading data from server: ' + error);
+                clearTimeout(loadSafetyTimer);
+                if (typeof onLoadedFunc === 'function') {
+                    onLoadedFunc();
+                }
+                console.warn('Error loading data from server:', error);
             });
+
+            stopScheduleWatching = function () {
+                clearTimeout(loadSafetyTimer);
+                if (typeof unsub === 'function') {
+                    unsub();
+                }
+            };
         } else {
             var onStorageEvent = function (e) {
                 var prefix = currentSemester + '_';
@@ -2012,24 +2100,25 @@
                 input[metadataCourseKey] = courseManager.getCourseData(course);
             });
 
-            doc.update(input);
-        } else {
-            try {
-                removeKeys.forEach(function (key) {
-                    localStorage.removeItem(key);
-                });
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore restoreSavedSession failed:', err);
+            });
+        }
+        try {
+            removeKeys.forEach(function (key) {
+                localStorage.removeItem(key);
+            });
 
-                newKeys.forEach(function (key) {
-                    localStorage.setItem(key, JSON.stringify(sessionToRestore[key]));
-                });
+            newKeys.forEach(function (key) {
+                localStorage.setItem(key, JSON.stringify(sessionToRestore[key]));
+            });
 
-                newMetadataCourses.forEach(function (course) {
-                    var metadataCourseKey = currentSemester + '_metadata_' + course;
-                    localStorage.setItem(metadataCourseKey, JSON.stringify(courseManager.getCourseData(course)));
-                });
-            } catch (e) {
-                // localStorage is not available in IE/Edge when running from a local file.
-            }
+            newMetadataCourses.forEach(function (course) {
+                var metadataCourseKey = currentSemester + '_metadata_' + course;
+                localStorage.setItem(metadataCourseKey, JSON.stringify(courseManager.getCourseData(course)));
+            });
+        } catch (e) {
+            // localStorage is not available in IE/Edge when running from a local file.
         }
 
         setScheduleFromSavedSession(sessionToRestore);
@@ -2398,7 +2487,9 @@
                 input[metadataCourseKey] = firebase.firestore.FieldValue.delete();
             });
 
-            doc.update(input);
+            doc.set(input, { merge: true }).catch(function (err) {
+                console.warn('Firestore setMetadataToCurrent failed:', err);
+            });
         } else {
             try {
                 courseNumbers.forEach(function (course) {

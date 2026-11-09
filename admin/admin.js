@@ -3,9 +3,11 @@
 (function () {
     'use strict';
 
+    var isHostingDomain = (typeof window !== 'undefined' && window.location &&
+        (window.location.hostname === 'cheesemate-yk.web.app' || window.location.hostname === 'cheesemate-yk.firebaseapp.com'));
     var firebaseConfig = {
         apiKey: 'AIzaSyC7leQH8fYdT_ycbYsezVXSSYgtK1wBOEU',
-        authDomain: 'cheesemate-yk.firebaseapp.com',
+        authDomain: isHostingDomain ? window.location.hostname : 'cheesemate-yk.firebaseapp.com',
         appId: '1:215004619874:web:2049a06ba5c2aa95fd1d3b',
         projectId: 'cheesemate-yk',
         storageBucket: 'cheesemate-yk.firebasestorage.app',

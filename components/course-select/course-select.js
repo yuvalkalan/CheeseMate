@@ -56,12 +56,15 @@ var CourseSelect = (function () {
                 addFilterButton(that, this);
             },
             onItemAdd: function (course) {
-                if (course === 'partial') {
-                    // Do nothing
-                } else {
-                    that.onItemAdd(course);
+                try {
+                    if (course === 'partial') {
+                        // Do nothing
+                    } else {
+                        that.onItemAdd(course);
+                    }
+                } finally {
+                    this.clear();
                 }
-                this.clear();
             },
             onDropdownItemActivate: function (course) {
                 if (course === 'partial') {
@@ -80,9 +83,28 @@ var CourseSelect = (function () {
             searchField: ['text', 'oldCourseNumber']
         }).data('selectize');
 
+        var touchMoved = false;
+        that.courseSelect.$dropdown.on('touchstart', function () {
+            touchMoved = false;
+        }).on('touchmove', function () {
+            touchMoved = true;
+        }).on('touchend', '[data-selectable]', function (e) {
+            if (touchMoved) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            that.courseSelect.onOptionSelect({
+                type: 'click',
+                preventDefault: function () {},
+                stopPropagation: function () {},
+                currentTarget: this
+            });
+        });
+
         that.courseSelect.$dropdown
             .tooltip({selector: '[data-toggle=tooltip]'})
-            .on('mousedown click', '[data-toggle=tooltip]', function () {
+            .on('mousedown click touchstart touchend', '[data-toggle=tooltip]', function () {
                 $(this).tooltip('hide');
             });
 
