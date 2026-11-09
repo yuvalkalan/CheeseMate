@@ -142,6 +142,11 @@ service cloud.firestore {
         (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0));
     }
 
+    // Check if the update affects only friend-related fields
+    function isFriendFieldsUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']);
+    }
+
     // Validate required fields exist
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
@@ -329,11 +334,10 @@ service cloud.firestore {
         (isOwner(userId) && isLevelUnchangedForNonAdmin() &&
          (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['level']) ||
           (!('level' in resource.data) && (!('level' in request.resource.data) || request.resource.data.level == 0)))) ||
-        (isAuthenticated() &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends', 'incomingRequests', 'outgoingRequests']))
+        (isAuthenticated() && isFriendFieldsUpdateOnly())
       ) && isValidUserDoc(request.resource.data) &&
-      (isAdmin() || (!('level' in resource.data) || resource.data.level != 1)) &&
-      (isAdmin() || (!('level' in request.resource.data) || request.resource.data.level != 1));
+      (isAdmin() || isFriendFieldsUpdateOnly() || (!('level' in resource.data) || resource.data.level != 1)) &&
+      (isAdmin() || isFriendFieldsUpdateOnly() || (!('level' in request.resource.data) || request.resource.data.level != 1));
 
       allow delete: if isOwner(userId) || isAdmin();
 
