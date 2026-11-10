@@ -190,10 +190,18 @@
                 courseButtonList.setLessonTypesHidden(course, lessonTypesHidden);
             },
             onLessonSelected: function (course, lessonNumber, lessonType) {
-                selectedLessonSave(course, lessonNumber, lessonType);
+                try {
+                    selectedLessonSave(course, lessonNumber, lessonType);
+                } catch (err) {
+                    console.error('Error in onLessonSelected:', err);
+                }
             },
             onLessonUnselected: function (course, lessonNumber, lessonType) {
-                selectedLessonUnsave(course, lessonNumber, lessonType);
+                try {
+                    selectedLessonUnsave(course, lessonNumber, lessonType);
+                } catch (err) {
+                    console.error('Error in onLessonUnselected:', err);
+                }
             },
             onCustomEventAdded: function (eventId, eventData) {
                 customEventSave(eventId, eventData);
@@ -1535,7 +1543,7 @@
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
-            input[courseKey + '.' + lessonType] = lessonNumber;
+            input[courseKey] = currentSavedSession[courseKey];
             doc.set(input, { merge: true }).catch(function (err) {
                 console.warn('Firestore selectedLessonSave failed:', err);
             });
@@ -1558,10 +1566,14 @@
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
-            var input = {};
-            input[courseKey + '.' + lessonType] = firebase.firestore.FieldValue.delete();
-            doc.set(input, { merge: true }).catch(function (err) {
-                console.warn('Firestore selectedLessonUnsave failed:', err);
+            var updateInput = {};
+            updateInput[courseKey + '.' + lessonType] = firebase.firestore.FieldValue.delete();
+            doc.update(updateInput).catch(function () {
+                var setInput = {};
+                setInput[courseKey] = currentSavedSession[courseKey];
+                doc.set(setInput, { merge: true }).catch(function (err) {
+                    console.warn('Firestore selectedLessonUnsave failed:', err);
+                });
             });
         }
         try {
@@ -1583,7 +1595,7 @@
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
             var input = {};
-            input[semesterCustomEventsKey + '.' + eventId] = eventData;
+            input[semesterCustomEventsKey] = currentSavedSession[semesterCustomEventsKey];
             doc.set(input, { merge: true }).catch(function (err) {
                 console.warn('Firestore customEventSave failed:', err);
             });
@@ -1606,10 +1618,14 @@
 
         var doc = firestoreAuthenticatedUserDoc();
         if (doc) {
-            var input = {};
-            input[semesterCustomEventsKey + '.' + eventId] = firebase.firestore.FieldValue.delete();
-            doc.set(input, { merge: true }).catch(function (err) {
-                console.warn('Firestore customEventUnsave failed:', err);
+            var updateInput = {};
+            updateInput[semesterCustomEventsKey + '.' + eventId] = firebase.firestore.FieldValue.delete();
+            doc.update(updateInput).catch(function () {
+                var setInput = {};
+                setInput[semesterCustomEventsKey] = currentSavedSession[semesterCustomEventsKey];
+                doc.set(setInput, { merge: true }).catch(function (err) {
+                    console.warn('Firestore customEventUnsave failed:', err);
+                });
             });
         }
         try {
@@ -1846,8 +1862,8 @@
 
                 // Safety guard against race conditions:
                 // If remote snapshot is empty or doesn't exist, but user already has courses (e.g. from localStorage or added recently)
+                var localSession = savedSessionFromLocalStorage();
                 if (!result.exists || !session[semesterCoursesKey] || session[semesterCoursesKey].length === 0) {
-                    var localSession = savedSessionFromLocalStorage();
                     var currentCoursesInUI = courseButtonList.getCourseNumbers(true);
 
                     if (currentCoursesInUI && currentCoursesInUI.length > 0) {
@@ -1860,6 +1876,42 @@
                         // Document doesn't exist in Firestore, but localStorage has saved schedule - migrate it!
                         session = localSession;
                         doc.set(session, { merge: true }).catch(function () {});
+                    }
+                } else {
+                    // Remote document exists and has courses.
+                    // Preserve any locally selected lessons/events that might be missing from remote:
+                    (session[semesterCoursesKey] || []).forEach(function (course) {
+                        var courseKey = currentSemester + '_' + course;
+                        session[courseKey] = session[courseKey] || {};
+                        if (Object.keys(session[courseKey]).length === 0) {
+                            if (currentSavedSession && currentSavedSession[courseKey] && Object.keys(currentSavedSession[courseKey]).length > 0) {
+                                session[courseKey] = $.extend(true, {}, currentSavedSession[courseKey]);
+                                var saveInput = {};
+                                saveInput[courseKey] = session[courseKey];
+                                doc.set(saveInput, { merge: true }).catch(function () {});
+                            } else if (localSession && localSession[courseKey] && Object.keys(localSession[courseKey]).length > 0) {
+                                session[courseKey] = $.extend(true, {}, localSession[courseKey]);
+                                var saveInput = {};
+                                saveInput[courseKey] = session[courseKey];
+                                doc.set(saveInput, { merge: true }).catch(function () {});
+                            }
+                        }
+                    });
+
+                    var semesterCustomEventsKey = currentSemester + '_custom_events';
+                    session[semesterCustomEventsKey] = session[semesterCustomEventsKey] || {};
+                    if (Object.keys(session[semesterCustomEventsKey]).length === 0) {
+                        if (currentSavedSession && currentSavedSession[semesterCustomEventsKey] && Object.keys(currentSavedSession[semesterCustomEventsKey]).length > 0) {
+                            session[semesterCustomEventsKey] = $.extend(true, {}, currentSavedSession[semesterCustomEventsKey]);
+                            var saveInput = {};
+                            saveInput[semesterCustomEventsKey] = session[semesterCustomEventsKey];
+                            doc.set(saveInput, { merge: true }).catch(function () {});
+                        } else if (localSession && localSession[semesterCustomEventsKey] && Object.keys(localSession[semesterCustomEventsKey]).length > 0) {
+                            session[semesterCustomEventsKey] = $.extend(true, {}, localSession[semesterCustomEventsKey]);
+                            var saveInput = {};
+                            saveInput[semesterCustomEventsKey] = session[semesterCustomEventsKey];
+                            doc.set(saveInput, { merge: true }).catch(function () {});
+                        }
                     }
                 }
 
@@ -2002,11 +2054,32 @@
         session[semesterCoursesKey] = data[semesterCoursesKey] || [];
         session[semesterCoursesKey].forEach(function (course) {
             var courseKey = currentSemester + '_' + course;
-            session[courseKey] = data[courseKey] || {};
+            session[courseKey] = $.extend(true, {}, data[courseKey] || {});
+
+            // Also check for flat keys with dot notation (e.g. "202601_00140003.הרצאה")
+            // in case they were written by previous versions
+            var prefix = courseKey + '.';
+            Object.keys(data).forEach(function (key) {
+                if (key.indexOf(prefix) === 0) {
+                    var lessonType = key.slice(prefix.length);
+                    if (data[key] !== undefined && data[key] !== null && typeof data[key] !== 'object') {
+                        session[courseKey][lessonType] = data[key];
+                    }
+                }
+            });
         });
 
         var semesterCustomEventsKey = currentSemester + '_custom_events';
-        session[semesterCustomEventsKey] = data[semesterCustomEventsKey] || {};
+        session[semesterCustomEventsKey] = $.extend(true, {}, data[semesterCustomEventsKey] || {});
+        var customEventsPrefix = semesterCustomEventsKey + '.';
+        Object.keys(data).forEach(function (key) {
+            if (key.indexOf(customEventsPrefix) === 0) {
+                var eventId = key.slice(customEventsPrefix.length);
+                if (data[key]) {
+                    session[semesterCustomEventsKey][eventId] = data[key];
+                }
+            }
+        });
 
         return session;
     }
