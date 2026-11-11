@@ -1120,7 +1120,20 @@
                     if (Array.isArray(friendCourses)) {
                         friendCourses.forEach(function (course) {
                             var courseKey = currentSemester + '_' + course;
-                            var friendCourseSelections = data[courseKey];
+                            var friendCourseSelections = $.extend(true, {}, data[courseKey] || {});
+
+                            // Also check for flat keys with dot notation (e.g. "202601_00140003.הרצאה")
+                            // in case they were written by previous versions
+                            var prefix = courseKey + '.';
+                            Object.keys(data).forEach(function (key) {
+                                if (key.indexOf(prefix) === 0) {
+                                    var lessonType = key.slice(prefix.length);
+                                    if (data[key] !== undefined && data[key] !== null && typeof data[key] !== 'object') {
+                                        friendCourseSelections[lessonType] = data[key];
+                                    }
+                                }
+                            });
+
                             if (friendCourseSelections && typeof friendCourseSelections === 'object') {
                                 Object.keys(friendCourseSelections).forEach(function (lessonType) {
                                     var friendLessonNum = friendCourseSelections[lessonType];
@@ -1167,7 +1180,7 @@
         }
 
         if (viewingFriendUid || viewingSharedSchedule) {
-            var myScheduleData = myFirestoreScheduleData || ownSavedSession || (!currentUserUid ? savedSessionFromLocalStorage() : null);
+            var myScheduleData = myFirestoreScheduleData ? savedSessionFromFirestoreData(myFirestoreScheduleData) : (ownSavedSession || (!currentUserUid ? savedSessionFromLocalStorage() : null));
             if (myScheduleData) {
                 var myCourses = myScheduleData[semesterCoursesKey];
                 if (Array.isArray(myCourses)) {
