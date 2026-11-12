@@ -36,6 +36,8 @@ rules_version = '2';
 //   - type: string (required, 1..50 chars) - notification type (e.g., 'friend_request_accepted')
 //   - fromUid: string (required, 1..128 chars) - UID of user who triggered notification (must equal auth UID if sent to another user)
 //   - fromUsername: string (required, 1..200 chars) - sender username or display name
+//   - fromLevel: number or null (optional, 0..100000) - sender authorization level
+//   - fromRole: string or null (optional, max 200 chars) - sender role label
 //   - message: string (required, 1..500 chars) - notification text message
 //   - timestamp: number (required, positive) - client timestamp of the notification
 //   - read: bool (required, initially false on create) - whether notification was read
@@ -217,11 +219,13 @@ service cloud.firestore {
 
     // Validate user notification document
     function isValidNotification(data) {
-      return hasOnlyAllowedFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read', 'requestId']) &&
+      return hasOnlyAllowedFields(['type', 'fromUid', 'fromUsername', 'fromLevel', 'fromRole', 'message', 'timestamp', 'read', 'requestId']) &&
         hasRequiredFields(['type', 'fromUid', 'fromUsername', 'message', 'timestamp', 'read']) &&
         data.type is string && data.type.size() >= 1 && data.type.size() <= 50 &&
         data.fromUid is string && data.fromUid.size() >= 1 && data.fromUid.size() <= 128 &&
         data.fromUsername is string && data.fromUsername.size() >= 1 && data.fromUsername.size() <= 200 &&
+        (!('fromLevel' in data) || data.fromLevel == null || (data.fromLevel is number && data.fromLevel >= 0 && data.fromLevel <= 100000 && int(data.fromLevel) == data.fromLevel)) &&
+        (!('fromRole' in data) || data.fromRole == null || (data.fromRole is string && data.fromRole.size() <= 200)) &&
         data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
         data.timestamp is number && data.timestamp > 0 &&
         data.read is bool &&
@@ -353,9 +357,9 @@ service cloud.firestore {
         // Notification documents are private to the recipient and readable by administrators
         allow get, list: if isOwner(userId) || isAdmin();
 
-        // Created by the user themselves or by another authenticated user sending a notification
+        // Created by the user themselves, by another authenticated user sending a notification, or by an administrator
         allow create: if isAuthenticated() &&
-          (isOwner(userId) || request.auth.uid == request.resource.data.fromUid) &&
+          (isOwner(userId) || request.auth.uid == request.resource.data.fromUid || isAdmin()) &&
           isValidNotification(request.resource.data) &&
           request.resource.data.read == false;
 

@@ -1772,23 +1772,25 @@
                 return Promise.resolve();
             }
 
-            var pushPayload = {
-                title: senderName,
-                body: message,
-                icon: '/icons/icon-192x192.png',
-                badge: '/icons/badge-72x72.png',
-                tag: 'system-broadcast-' + Date.now(),
-                url: '/'
-            };
+            var pushWorkerUrl = (typeof NotificationsManager !== 'undefined' && NotificationsManager.WORKER_URL) ?
+                NotificationsManager.WORKER_URL : 'https://cheesemate-push.yuvalkalan.workers.dev';
+            var broadcastTag = 'system-broadcast-' + Date.now();
 
             var pushPromises = targetUids.map(function (tUid, idx) {
-                return fetch('https://cheesemate-notifications.yuvalkalan.workers.dev/api/send-push', {
+                return fetch(pushWorkerUrl + '/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        userId: tUid,
-                        notification: pushPayload
+                        targetUid: tUid,
+                        title: senderName,
+                        body: message,
+                        icon: '/icons/android-chrome-192x192.png',
+                        badge: '/icons/favicon-32x32.png',
+                        tag: broadcastTag,
+                        url: '/'
                     })
+                }).then(function (res) {
+                    return res.json();
                 }).catch(function (err) {
                     console.warn('Push error for ' + tUid, err);
                     return null;
