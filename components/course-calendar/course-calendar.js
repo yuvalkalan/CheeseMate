@@ -637,15 +637,15 @@ var CourseCalendar = (function () {
             return !event.isAvailableSlot && !event.temporary && event.start.week() === 1 && event.selected;
         });
 
-        var calendarMoment = calendar.fullCalendar('getCalendar').moment;
+        var calObj = calendar.fullCalendar('getCalendar');
         var slotEvents = [];
 
         AVAILABLE_SLOT_DAYS.forEach(function (dayInfo) {
             for (var hour = 8; hour < 18; hour++) {
                 var startStr = ('0' + hour).slice(-2) + ':30';
                 var endStr = ('0' + (hour + 1)).slice(-2) + ':30';
-                var slotStart = calendarMoment('2017-01-0' + dayInfo.dayNum + 'T' + startStr + ':00');
-                var slotEnd = calendarMoment('2017-01-0' + dayInfo.dayNum + 'T' + endStr + ':00');
+                var slotStart = calObj.moment('2017-01-0' + dayInfo.dayNum + 'T' + startStr + ':00');
+                var slotEnd = calObj.moment('2017-01-0' + dayInfo.dayNum + 'T' + endStr + ':00');
                 var slotRange = { start: slotStart, end: slotEnd };
 
                 var isOccupied = occupiedEvents.some(function (ev) {
@@ -805,6 +805,7 @@ var CourseCalendar = (function () {
 
                         updateLessonEvents(calendar, targetLessonTypeEvents);
                         updateCalendarMaxDayAndTime(calendar);
+                        updateAvailableSlots(that);
 
                         that.onLessonSelected(event.courseNumber, '-', getEventLessonType(event));
 
