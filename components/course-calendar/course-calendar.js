@@ -1083,6 +1083,80 @@ var CourseCalendar = (function () {
             modalContent.append(friendsList);
         }
 
+        if (isAvailableSlot) {
+            var busyFriends = (eventFriendData && eventFriendData.busyFriends) || [];
+            if (busyFriends.length > 0) {
+                var busySection = $('<div class="event-friends-busy-section mt-3"></div>');
+                var toggleBtn = $('<button type="button" class="btn btn-sm btn-block event-friends-busy-toggle d-flex justify-content-between align-items-center py-2 px-3 rounded border">' +
+                    '<span class="font-weight-bold"><i class="fas fa-user-clock ml-2"></i> שאר החברים (' + busyFriends.length + ')</span>' +
+                    '<i class="fas fa-chevron-down event-friends-busy-chevron"></i>' +
+                    '</button>');
+                var busyList = $('<div class="list-group mt-2" style="display: none;"></div>');
+
+                busyFriends.forEach(function (bf) {
+                    var item = $('<div class="list-group-item event-friends-item d-flex justify-content-between align-items-center py-2 px-3"></div>');
+
+                    var friendName = bf.username || bf.displayName || 'חבר';
+                    var leftSide = $('<div class="d-flex align-items-center" style="cursor: pointer; min-width: 0; flex: 1;" title="לחץ לצפייה במערכת של ' + friendName + '"></div>');
+                    leftSide.append($('<span class="ml-3 text-secondary flex-shrink-0"><i class="fas fa-user-clock fa-lg"></i></span>'));
+
+                    var infoDiv = $('<div style="min-width: 0; flex: 1;"></div>');
+                    var nameRow = $('<div class="d-flex align-items-center flex-wrap" style="gap: 6px;"></div>');
+                    var nameDiv = $('<div class="event-friends-name font-weight-bold"></div>').text(friendName);
+                    if (typeof RoleManager !== 'undefined') {
+                        RoleManager.applyRoleHover(nameDiv, bf);
+                    } else if (bf.isAdmin || bf.level === 1) {
+                        nameDiv.addClass('admin-golden-gradient');
+                    } else if (bf.level === 2) {
+                        nameDiv.addClass('role-atmosphere-gradient');
+                    }
+                    nameRow.append(nameDiv);
+
+                    var attendingEvents = bf.attendingEvents || [];
+                    attendingEvents.forEach(function (evLabel) {
+                        var evBadge = $('<span class="badge event-friends-attending-badge"></span>').text(evLabel);
+                        nameRow.append(evBadge);
+                    });
+
+                    infoDiv.append(nameRow);
+                    if (bf.email) {
+                        infoDiv.append($('<div class="event-friends-email small"></div>').text(bf.email));
+                    }
+                    leftSide.append(infoDiv);
+
+                    var doView = function () {
+                        $('.modal').modal('hide');
+                        var viewFn = window.cheeseMateViewFriendSchedule;
+                        if (viewFn && bf.uid) {
+                            viewFn(bf.uid, friendName);
+                        }
+                    };
+                    leftSide.click(doView);
+
+                    var viewBtn = $('<button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0 mr-2">' +
+                        '<i class="fas fa-calendar-alt ml-1"></i> צפה במערכת' +
+                        '</button>').click(doView);
+
+                    item.append(leftSide, viewBtn);
+                    busyList.append(item);
+                });
+
+                toggleBtn.click(function () {
+                    var chevron = toggleBtn.find('.event-friends-busy-chevron');
+                    if (busyList.is(':visible')) {
+                        busyList.slideUp(150);
+                        chevron.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+                    } else {
+                        busyList.slideDown(150);
+                        chevron.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+                    }
+                });
+
+                busySection.append(toggleBtn, busyList);
+                modalContent.append(busySection);
+            }
+        }
+
         saveSpotBtn.click(function () {
             var currentUser = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser : null;
             if (!currentUser) {

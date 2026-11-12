@@ -1154,7 +1154,11 @@
                         if (dayNum && parsedTime && busyByDay[dayNum]) {
                             var startMin = timeStrToMinutes(parsedTime.start);
                             var endMin = (parsedTime.end === '00:00') ? (24 * 60) : timeStrToMinutes(parsedTime.end);
-                            busyByDay[dayNum].push({ start: startMin, end: endMin });
+                            var general = courseManager.getGeneralInfo(course);
+                            var courseName = (general && general['שם מקצוע']) ? general['שם מקצוע'] : course;
+                            var lessonTypeAndNum = courseManager.getLessonTypeAndNumber(lesson);
+                            var eventLabel = courseName + (lessonTypeAndNum ? ' (' + lessonTypeAndNum + ')' : '');
+                            busyByDay[dayNum].push({ start: startMin, end: endMin, label: eventLabel });
                         }
                     }
                 }
@@ -1173,7 +1177,8 @@
                         var cStartMin = parseInt(startMatch[2], 10) * 60 + parseInt(startMatch[3], 10);
                         var cEndMin = (endDay > startDay) ? (24 * 60) : (parseInt(endMatch[2], 10) * 60 + parseInt(endMatch[3], 10));
                         if (busyByDay[startDay]) {
-                            busyByDay[startDay].push({ start: cStartMin, end: cEndMin });
+                            var customLabel = (ev.title || 'אירוע מותאם אישית').replace(/\n/g, ', ').trim();
+                            busyByDay[startDay].push({ start: cStartMin, end: cEndMin, label: customLabel });
                         }
                     }
                 }
@@ -1313,16 +1318,16 @@
                             for (var hour = 8; hour < 18; hour++) {
                                 var slotStartMin = hour * 60 + 30;
                                 var slotEndMin = (hour + 1) * 60 + 30;
-                                var isBusyInSlot = dayBusy.some(function (interval) {
+                                var startStr = ('0' + hour).slice(-2) + ':30';
+                                var endStr = ('0' + (hour + 1)).slice(-2) + ':30';
+                                var slotKey = 'available_slot.' + dayNum + '.' + startStr + '-' + endStr;
+                                if (!eventFriendsMap[slotKey]) {
+                                    eventFriendsMap[slotKey] = { count: 0, names: [], friends: [], busyFriends: [] };
+                                }
+                                var matchingBusy = dayBusy.filter(function (interval) {
                                     return interval.start < slotEndMin && interval.end > slotStartMin;
                                 });
-                                if (!isBusyInSlot) {
-                                    var startStr = ('0' + hour).slice(-2) + ':30';
-                                    var endStr = ('0' + (hour + 1)).slice(-2) + ':30';
-                                    var slotKey = 'available_slot.' + dayNum + '.' + startStr + '-' + endStr;
-                                    if (!eventFriendsMap[slotKey]) {
-                                        eventFriendsMap[slotKey] = { count: 0, names: [], friends: [] };
-                                    }
+                                if (matchingBusy.length === 0) {
                                     eventFriendsMap[slotKey].count++;
                                     eventFriendsMap[slotKey].names.push(friendName);
                                     eventFriendsMap[slotKey].friends.push({
@@ -1332,6 +1337,22 @@
                                         level: friendLevel,
                                         role: profile.role || data.role,
                                         isAdmin: isFriendAdmin
+                                    });
+                                } else {
+                                    var attendingEvents = [];
+                                    matchingBusy.forEach(function (interval) {
+                                        if (interval.label && attendingEvents.indexOf(interval.label) === -1) {
+                                            attendingEvents.push(interval.label);
+                                        }
+                                    });
+                                    eventFriendsMap[slotKey].busyFriends.push({
+                                        uid: uid,
+                                        username: friendName,
+                                        email: profile.email || '',
+                                        level: friendLevel,
+                                        role: profile.role || data.role,
+                                        isAdmin: isFriendAdmin,
+                                        attendingEvents: attendingEvents
                                     });
                                 }
                             }
@@ -1379,7 +1400,7 @@
                                 var myEndStr = ('0' + (myHour + 1)).slice(-2) + ':30';
                                 var mySlotKey = 'available_slot.' + myDayNum + '.' + myStartStr + '-' + myEndStr;
                                 if (!eventFriendsMap[mySlotKey]) {
-                                    eventFriendsMap[mySlotKey] = { count: 0, names: [], friends: [] };
+                                    eventFriendsMap[mySlotKey] = { count: 0, names: [], friends: [], busyFriends: [] };
                                 }
                                 eventFriendsMap[mySlotKey].sharedWithMe = true;
                             }

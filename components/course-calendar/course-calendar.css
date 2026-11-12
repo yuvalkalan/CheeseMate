@@ -197,3 +197,28 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease-in-out;
 }
+
+.event-friends-busy-toggle {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #495057;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.event-friends-busy-toggle:hover,
+.event-friends-busy-toggle:focus {
+    background-color: #e9ecef;
+    color: #212529;
+    box-shadow: none;
+}
+
+.event-friends-attending-badge {
+    background-color: #e7f1ff;
+    color: #0056b3;
+    border: 1px solid #b6d4fe;
+    font-size: 80%;
+    font-weight: 600;
+    padding: 0.3em 0.6em;
+    white-space: normal;
+    text-align: right;
+}
