@@ -137,7 +137,22 @@
                 courseExamInfo.renderCourses(courseButtonList.getCourseNumbers(true));
                 courseSelect.filterApply();
             },
-            onReorder: coursesOrderSave
+            onReorder: coursesOrderSave,
+            onToggleAvailableSlots: function (show) {
+                courseCalendar.setShowAvailableSlots(show);
+            },
+            onAvailableSlotsHoverIn: function () {
+                if (previewingFromSelectControl) {
+                    courseCalendar.unpreviewCourse(previewingFromSelectControl);
+                }
+                courseCalendar.previewAvailableSlots();
+            },
+            onAvailableSlotsHoverOut: function () {
+                courseCalendar.unpreviewAvailableSlots();
+                if (previewingFromSelectControl) {
+                    courseCalendar.previewCourse(previewingFromSelectControl);
+                }
+            }
         });
 
         courseExamInfo = new CourseExamInfo($('#course-exam-info'), {
@@ -211,6 +226,12 @@
             },
             onCustomEventRemoved: function (eventId) {
                 customEventUnsave(eventId);
+            },
+            onAvailableSlotHoverIn: function () {
+                courseButtonList.setAvailableSlotsHovered();
+            },
+            onAvailableSlotHoverOut: function () {
+                courseButtonList.removeAvailableSlotsHovered();
             }
         });
 
@@ -1055,6 +1076,113 @@
         watchCourseStudentCounts();
     }
 
+    function stringHexEncode(str) {
+        var result = '';
+        for (var i = 0; i < str.length; i++) {
+            var hex = str.charCodeAt(i).toString(16);
+            result += ('000' + hex).slice(-4);
+        }
+        return result;
+    }
+
+    function getLessonTypeForCourse(courseNumber, lesson) {
+        if (/^(394[89]\d\d|03940[89]\d\d)$/.test(courseNumber)) {
+            return 'sport';
+        }
+        return stringHexEncode(lesson['סוג'] || '');
+    }
+
+    function timeStrToMinutes(str) {
+        var parts = (str || '').split(':');
+        return parseInt(parts[0], 10) * 60 + parseInt(parts[1] || '0', 10);
+    }
+
+    function getBusyIntervalsFromSession(session) {
+        if (!session) {
+            return null;
+        }
+        var semesterCoursesKey = currentSemester + '_courses';
+        var semesterCustomEventsKey = currentSemester + '_custom_events';
+        var courses = session[semesterCoursesKey];
+        var customEvents = session[semesterCustomEventsKey] || {};
+        var hasCourses = Array.isArray(courses) && courses.length > 0;
+        var hasCustomEvents = customEvents && typeof customEvents === 'object' && Object.keys(customEvents).length > 0;
+        if (!hasCourses && !hasCustomEvents) {
+            return null;
+        }
+
+        var dayMapping = {
+            'ראשון': 1,
+            'שני': 2,
+            'שלישי': 3,
+            'רביעי': 4,
+            'חמישי': 5,
+            'שישי': 6,
+            'א': 1,
+            'ב': 2,
+            'ג': 3,
+            'ד': 4,
+            'ה': 5,
+            'ו': 6
+        };
+
+        var busyByDay = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+
+        if (hasCourses) {
+            courses.forEach(function (course) {
+                if (!courseManager.doesExist(course)) {
+                    return;
+                }
+                var courseKey = currentSemester + '_' + course;
+                var courseSelections = session[courseKey] || {};
+                var schedule = courseManager.getSchedule(course) || [];
+                var lessonsAdded = {};
+
+                for (var i = 0; i < schedule.length; i++) {
+                    var lesson = schedule[i];
+                    if (lessonsAdded[lesson['מס.']] && lessonsAdded[lesson['מס.']] !== lesson['קבוצה']) {
+                        continue;
+                    }
+                    lessonsAdded[lesson['מס.']] = lesson['קבוצה'];
+
+                    var lessonType = getLessonTypeForCourse(course, lesson);
+                    var selectedNum = courseSelections[lessonType];
+                    if (selectedNum !== undefined && selectedNum !== null && selectedNum !== '-' &&
+                        String(lesson['מס.']) === String(selectedNum)) {
+                        var dayNum = dayMapping[lesson['יום']];
+                        var parsedTime = lesson['שעה'] ? courseManager.parseLessonTime(lesson['שעה']) : null;
+                        if (dayNum && parsedTime && busyByDay[dayNum]) {
+                            var startMin = timeStrToMinutes(parsedTime.start);
+                            var endMin = (parsedTime.end === '00:00') ? (24 * 60) : timeStrToMinutes(parsedTime.end);
+                            busyByDay[dayNum].push({ start: startMin, end: endMin });
+                        }
+                    }
+                }
+            });
+        }
+
+        if (hasCustomEvents) {
+            Object.keys(customEvents).forEach(function (eventId) {
+                var ev = customEvents[eventId];
+                if (ev && ev.start && ev.end) {
+                    var startMatch = /^2017-01-0([1-7])T(\d\d):(\d\d)/.exec(ev.start);
+                    var endMatch = /^2017-01-0([1-7])T(\d\d):(\d\d)/.exec(ev.end);
+                    if (startMatch && endMatch) {
+                        var startDay = parseInt(startMatch[1], 10);
+                        var endDay = parseInt(endMatch[1], 10);
+                        var cStartMin = parseInt(startMatch[2], 10) * 60 + parseInt(startMatch[3], 10);
+                        var cEndMin = (endDay > startDay) ? (24 * 60) : (parseInt(endMatch[2], 10) * 60 + parseInt(endMatch[3], 10));
+                        if (busyByDay[startDay]) {
+                            busyByDay[startDay].push({ start: cStartMin, end: cEndMin });
+                        }
+                    }
+                }
+            });
+        }
+
+        return busyByDay;
+    }
+
     function recomputeCourseStudentCounts() {
         if (!courseButtonList) {
             return;
@@ -1175,6 +1303,40 @@
                             };
                         });
                     }
+
+                    // 3. Track friends sharing each available 1-hour slot (Sunday-Thursday, 08:30-18:30)
+                    var friendSession = savedSessionFromFirestoreData(data);
+                    var friendBusyByDay = getBusyIntervalsFromSession(friendSession);
+                    if (friendBusyByDay) {
+                        for (var dayNum = 1; dayNum <= 5; dayNum++) {
+                            var dayBusy = friendBusyByDay[dayNum] || [];
+                            for (var hour = 8; hour < 18; hour++) {
+                                var slotStartMin = hour * 60 + 30;
+                                var slotEndMin = (hour + 1) * 60 + 30;
+                                var isBusyInSlot = dayBusy.some(function (interval) {
+                                    return interval.start < slotEndMin && interval.end > slotStartMin;
+                                });
+                                if (!isBusyInSlot) {
+                                    var startStr = ('0' + hour).slice(-2) + ':30';
+                                    var endStr = ('0' + (hour + 1)).slice(-2) + ':30';
+                                    var slotKey = 'available_slot.' + dayNum + '.' + startStr + '-' + endStr;
+                                    if (!eventFriendsMap[slotKey]) {
+                                        eventFriendsMap[slotKey] = { count: 0, names: [], friends: [] };
+                                    }
+                                    eventFriendsMap[slotKey].count++;
+                                    eventFriendsMap[slotKey].names.push(friendName);
+                                    eventFriendsMap[slotKey].friends.push({
+                                        uid: uid,
+                                        username: friendName,
+                                        email: profile.email || '',
+                                        level: friendLevel,
+                                        role: profile.role || data.role,
+                                        isAdmin: isFriendAdmin
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -1200,6 +1362,29 @@
                             });
                         }
                     });
+                }
+
+                var myBusyByDay = getBusyIntervalsFromSession(myScheduleData);
+                if (myBusyByDay) {
+                    for (var myDayNum = 1; myDayNum <= 5; myDayNum++) {
+                        var myDayBusy = myBusyByDay[myDayNum] || [];
+                        for (var myHour = 8; myHour < 18; myHour++) {
+                            var mySlotStartMin = myHour * 60 + 30;
+                            var mySlotEndMin = (myHour + 1) * 60 + 30;
+                            var amIBusyInSlot = myDayBusy.some(function (interval) {
+                                return interval.start < mySlotEndMin && interval.end > mySlotStartMin;
+                            });
+                            if (!amIBusyInSlot) {
+                                var myStartStr = ('0' + myHour).slice(-2) + ':30';
+                                var myEndStr = ('0' + (myHour + 1)).slice(-2) + ':30';
+                                var mySlotKey = 'available_slot.' + myDayNum + '.' + myStartStr + '-' + myEndStr;
+                                if (!eventFriendsMap[mySlotKey]) {
+                                    eventFriendsMap[mySlotKey] = { count: 0, names: [], friends: [] };
+                                }
+                                eventFriendsMap[mySlotKey].sharedWithMe = true;
+                            }
+                        }
+                    }
                 }
             }
         }

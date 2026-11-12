@@ -14,14 +14,50 @@ var CourseButtonList = (function () {
         this.onEnableCourse = options.onEnableCourse;
         this.onDisableCourse = options.onDisableCourse;
         this.onReorder = options.onReorder;
+        this.onToggleAvailableSlots = options.onToggleAvailableSlots;
+        this.onAvailableSlotsHoverIn = options.onAvailableSlotsHoverIn;
+        this.onAvailableSlotsHoverOut = options.onAvailableSlotsHoverOut;
 
         var that = this;
 
         that.sortableInitialized = false;
+        that.availableSlotsActive = false;
 
         if (that.readonly) {
             that.element.addClass('course-button-list-readonly');
         }
+
+        // Create "Show Available Slots" toggle button above course badges
+        var availableSlotsLabel = 'הצג חלונות פנויים';
+        var slotsSpanAbsolute = $('<div class="content-wrapper"></div>').html(
+            $('<span class="content-absolute"></span>').text(availableSlotsLabel)
+        );
+        var slotsSpanBoldHidden = $('<span class="content-bold-hidden"></span>').text(availableSlotsLabel);
+
+        that.availableSlotsContainer = $('<ul class="available-slots-button-container list-group"></ul>');
+        that.availableSlotsButton = $('<li class="list-group-item course-button-list-item available-slots-button-item"></li>');
+        that.availableSlotsButton
+            .click(function () {
+                var newActive = !that.availableSlotsActive;
+                that.setAvailableSlotsActive(newActive);
+                if (that.onToggleAvailableSlots) {
+                    that.onToggleAvailableSlots(newActive);
+                }
+            })
+            .hover(function () {
+                $(this).addClass('course-button-list-item-hovered');
+                if (that.onAvailableSlotsHoverIn) {
+                    that.onAvailableSlotsHoverIn();
+                }
+            }, function () {
+                $(this).removeClass('course-button-list-item-hovered');
+                if (that.onAvailableSlotsHoverOut) {
+                    that.onAvailableSlotsHoverOut();
+                }
+            })
+            .append(slotsSpanAbsolute, slotsSpanBoldHidden);
+        that.availableSlotsContainer.append(that.availableSlotsButton);
+        that.element.append(that.availableSlotsContainer);
 
         // Create a wrapper container inside the element for the badges
         that.badgeContainer = $('<ul class="course-button-list-badge-container list-group"></ul>');
@@ -907,6 +943,32 @@ var CourseButtonList = (function () {
         this.badgeContainer.find('[data-toggle="tooltip"]').tooltip('hide');
         this.destroySortable();
         this.badgeContainer.empty();
+    };
+
+    CourseButtonList.prototype.setAvailableSlotsActive = function (active) {
+        var that = this;
+        that.availableSlotsActive = !!active;
+        if (!that.availableSlotsButton) {
+            return;
+        }
+        if (that.availableSlotsActive) {
+            var color = that.colorGenerator('הצג חלונות פנויים');
+            that.availableSlotsButton.addClass('active').css('background-color', color);
+        } else {
+            that.availableSlotsButton.removeClass('active').css('background-color', '');
+        }
+    };
+
+    CourseButtonList.prototype.setAvailableSlotsHovered = function () {
+        if (this.availableSlotsButton) {
+            this.availableSlotsButton.addClass('course-button-list-item-hovered');
+        }
+    };
+
+    CourseButtonList.prototype.removeAvailableSlotsHovered = function () {
+        if (this.availableSlotsButton) {
+            this.availableSlotsButton.removeClass('course-button-list-item-hovered');
+        }
     };
 
     CourseButtonList.prototype.setReadonly = function (readonly) {

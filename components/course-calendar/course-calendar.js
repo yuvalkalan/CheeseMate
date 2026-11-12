@@ -19,7 +19,10 @@ var CourseCalendar = (function () {
         this.onCustomEventAdded = options.onCustomEventAdded;
         this.onCustomEventUpdated = options.onCustomEventUpdated;
         this.onCustomEventRemoved = options.onCustomEventRemoved;
+        this.onAvailableSlotHoverIn = options.onAvailableSlotHoverIn;
+        this.onAvailableSlotHoverOut = options.onAvailableSlotHoverOut;
         this.eventFriendCounts = {};
+        this.showAvailableSlots = false;
 
         var that = this;
 
@@ -326,7 +329,7 @@ var CourseCalendar = (function () {
 
         calendar.fullCalendar('clientEvents', function (event) {
             // Only displayed events determine the visible range.
-            if (event.start.week() !== 1) {
+            if (event.isAvailableSlot || event.start.week() !== 1) {
                 return false;
             }
 
@@ -586,6 +589,88 @@ var CourseCalendar = (function () {
         }
     }
 
+    var AVAILABLE_SLOT_DAYS = [
+        { dayNum: 1, name: 'ראשון' },
+        { dayNum: 2, name: 'שני' },
+        { dayNum: 3, name: 'שלישי' },
+        { dayNum: 4, name: 'רביעי' },
+        { dayNum: 5, name: 'חמישי' }
+    ];
+
+    function makeAvailableSlotEvent(courseCalendar, dayNum, dayName, startStr, endStr, startMoment, endMoment) {
+        var slotKey = 'available_slot.' + dayNum + '.' + startStr + '-' + endStr;
+
+        return {
+            id: 'available_slot_' + dayNum + '_' + startStr.replace(':', ''),
+            title: '',
+            start: startMoment,
+            end: endMoment,
+            backgroundColor: courseCalendar.colorGenerator('הצג חלונות פנויים'),
+            textColor: 'white',
+            borderColor: 'white',
+            editable: false,
+            className: 'calendar-item-available-slot',
+            courseNumber: null,
+            lessonData: null,
+            selected: true,
+            temporary: false,
+            isAvailableSlot: true,
+            slotKey: slotKey,
+            slotDayName: dayName,
+            slotTimeRange: startStr + ' - ' + endStr
+        };
+    }
+
+    function updateAvailableSlots(courseCalendar) {
+        var calendar = courseCalendar.element;
+
+        calendar.find('.calendar-item-available-slot .calendar-item-friend-badge[data-toggle="tooltip"], .calendar-item-available-slot .calendar-item-shared-me-badge[data-toggle="tooltip"]').tooltip('hide');
+        calendar.fullCalendar('removeEvents', function (event) {
+            return Boolean(event.isAvailableSlot);
+        });
+
+        if (!courseCalendar.showAvailableSlots) {
+            return;
+        }
+
+        var occupiedEvents = calendar.fullCalendar('clientEvents', function (event) {
+            return !event.isAvailableSlot && !event.temporary && event.start.week() === 1 && event.selected;
+        });
+
+        var calendarMoment = calendar.fullCalendar('getCalendar').moment;
+        var slotEvents = [];
+
+        AVAILABLE_SLOT_DAYS.forEach(function (dayInfo) {
+            for (var hour = 8; hour < 18; hour++) {
+                var startStr = ('0' + hour).slice(-2) + ':30';
+                var endStr = ('0' + (hour + 1)).slice(-2) + ':30';
+                var slotStart = calendarMoment('2017-01-0' + dayInfo.dayNum + 'T' + startStr + ':00');
+                var slotEnd = calendarMoment('2017-01-0' + dayInfo.dayNum + 'T' + endStr + ':00');
+                var slotRange = { start: slotStart, end: slotEnd };
+
+                var isOccupied = occupiedEvents.some(function (ev) {
+                    return areEventsOverlapping(ev, slotRange);
+                });
+
+                if (!isOccupied) {
+                    slotEvents.push(makeAvailableSlotEvent(
+                        courseCalendar,
+                        dayInfo.dayNum,
+                        dayInfo.name,
+                        startStr,
+                        endStr,
+                        slotStart,
+                        slotEnd
+                    ));
+                }
+            }
+        });
+
+        if (slotEvents.length > 0) {
+            calendar.fullCalendar('renderEvents', slotEvents);
+        }
+    }
+
     function makeCustomEvent(courseCalendar, eventId, eventTitle, start, end) {
         return {
             id: eventId,
@@ -641,6 +726,7 @@ var CourseCalendar = (function () {
 
                     calendar.fullCalendar('renderEvent', makeCustomEvent(that, eventId, eventTitle, start, end));
                     updateCalendarMaxDayAndTime(calendar);
+                    updateAvailableSlots(that);
 
                     that.onCustomEventAdded(eventIdCounter, {
                         title: eventTitle,
@@ -653,7 +739,7 @@ var CourseCalendar = (function () {
     }
 
     function onCustomEventMoveResize(event) {
-        if (event.courseNumber !== null) {
+        if (event.courseNumber !== null || event.isAvailableSlot) {
             return;
         }
 
@@ -661,6 +747,7 @@ var CourseCalendar = (function () {
         var calendar = that.element;
 
         updateCalendarMaxDayAndTime(calendar);
+        updateAvailableSlots(that);
 
         that.onCustomEventUpdated(event.id.replace(/^custom_event_/, ''), {
             title: event.title,
@@ -670,6 +757,10 @@ var CourseCalendar = (function () {
     }
 
     function onEventClick(event, jsEvent) {
+        if (event.isAvailableSlot) {
+            return;
+        }
+
         if (this.readonly) {
             return;
         }
@@ -766,6 +857,7 @@ var CourseCalendar = (function () {
 
                         calendar.fullCalendar('removeEvents', event.id);
                         updateCalendarMaxDayAndTime(calendar);
+                        updateAvailableSlots(that);
 
                         that.onCustomEventRemoved(event.id.replace(/^custom_event_/, ''));
                     }
@@ -804,6 +896,7 @@ var CourseCalendar = (function () {
 
         updateLessonEvents(calendar, sameLessonTypeEvents);
         updateCalendarMaxDayAndTime(calendar);
+        updateAvailableSlots(that);
 
         Object.keys(conflictedCourses).forEach(function (conflictedCourse) {
             var conflicted = getCourseConflictedStatus(calendar, conflictedCourse);
@@ -853,6 +946,14 @@ var CourseCalendar = (function () {
     }
 
     function onEventMouseover(event) {
+        if (event.isAvailableSlot) {
+            $('.calendar-item-available-slot', this.element).addClass('calendar-item-same-course-as-hovered');
+            if (this.onAvailableSlotHoverIn) {
+                this.onAvailableSlotHoverIn();
+            }
+            return;
+        }
+
         if (event.courseNumber === null) {
             return;
         }
@@ -863,6 +964,14 @@ var CourseCalendar = (function () {
     }
 
     function onEventMouseout(event) {
+        if (event.isAvailableSlot) {
+            $('.calendar-item-available-slot', this.element).removeClass('calendar-item-same-course-as-hovered');
+            if (this.onAvailableSlotHoverOut) {
+                this.onAvailableSlotHoverOut();
+            }
+            return;
+        }
+
         if (event.courseNumber === null) {
             return;
         }
@@ -873,8 +982,9 @@ var CourseCalendar = (function () {
     }
 
     function showEventFriendsModal(courseCalendar, event, eventFriendData) {
+        var isAvailableSlot = Boolean(event.isAvailableSlot);
         var courseNumber = event.courseNumber;
-        var courseTitle = courseCalendar.courseManager.getTitle(courseNumber);
+        var courseTitle = isAvailableSlot ? 'חלון פנוי' : courseCalendar.courseManager.getTitle(courseNumber);
 
         var modalContent = $('<div class="event-friends-modal-container"></div>');
 
@@ -883,7 +993,14 @@ var CourseCalendar = (function () {
         detailsBox.append($('<div class="event-friends-title font-weight-bold mb-1"></div>').text(courseTitle));
 
         var parts = [];
-        if (event.lessonData) {
+        if (isAvailableSlot) {
+            if (event.slotDayName) {
+                parts.push('יום ' + event.slotDayName);
+            }
+            if (event.slotTimeRange) {
+                parts.push(event.slotTimeRange);
+            }
+        } else if (event.lessonData) {
             if (event.lessonData['יום']) {
                 parts.push('יום ' + event.lessonData['יום']);
             }
@@ -913,7 +1030,9 @@ var CourseCalendar = (function () {
             '<i class="fas fa-chair ml-2"></i> <span>שמור לי מקום!</span>' +
             '</button>');
         saveSpotBox.append(saveSpotBtn);
-        modalContent.append(saveSpotBox);
+        if (!isAvailableSlot) {
+            modalContent.append(saveSpotBox);
+        }
 
         // Friends list
         var friends = (eventFriendData && eventFriendData.friends) || [];
@@ -1095,8 +1214,10 @@ var CourseCalendar = (function () {
             }
         }
 
-        if (event.courseNumber !== null && that.eventFriendCounts) {
-            var eventKey = event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : '');
+        if ((event.courseNumber !== null || event.isAvailableSlot) && that.eventFriendCounts) {
+            var eventKey = event.isAvailableSlot ?
+                event.slotKey :
+                (event.courseNumber + '.' + getEventLessonType(event) + '.' + (event.lessonData ? event.lessonData['מס.'] : ''));
             var eventFriendData = that.eventFriendCounts[eventKey];
             var hasFriendsCount = Boolean(eventFriendData && eventFriendData.count > 0);
             var isSharedWithMe = Boolean(eventFriendData && eventFriendData.sharedWithMe && event.selected);
@@ -1223,6 +1344,7 @@ var CourseCalendar = (function () {
         }
 
         updateCalendarMaxDayAndTime(calendar);
+        updateAvailableSlots(that);
 
         function countEventConflicts(event) {
             var count = 0;
@@ -1276,6 +1398,7 @@ var CourseCalendar = (function () {
         });
 
         updateCalendarMaxDayAndTime(calendar);
+        updateAvailableSlots(that);
 
         // True if the event cannot be selected because of the given course.
         function isConflicted(event, course) {
@@ -1379,6 +1502,7 @@ var CourseCalendar = (function () {
 
         calendar.fullCalendar('renderEvents', events);
         updateCalendarMaxDayAndTime(calendar);
+        updateAvailableSlots(that);
 
         Object.keys(schedule).forEach(function (course) {
             if (getCourseConflictedStatus(calendar, course)) {
@@ -1423,6 +1547,9 @@ var CourseCalendar = (function () {
         var count = 0;
 
         calendar.fullCalendar('clientEvents', function (event) {
+            if (event.isAvailableSlot) {
+                return false;
+            }
             if (event.start.week() === 1 && event.selected) {
                 var subject = '';
                 var description = '';
@@ -1498,13 +1625,27 @@ var CourseCalendar = (function () {
         updateCalendarMaxDayAndTime(calendar);
     };
 
+    CourseCalendar.prototype.setShowAvailableSlots = function (show) {
+        this.showAvailableSlots = !!show;
+        updateAvailableSlots(this);
+    };
+
+    CourseCalendar.prototype.previewAvailableSlots = function () {
+        $('.calendar-item-available-slot', this.element).addClass('calendar-item-previewed');
+    };
+
+    CourseCalendar.prototype.unpreviewAvailableSlots = function () {
+        this.element.find('.calendar-item-available-slot .calendar-item-friend-badge[data-toggle="tooltip"]').tooltip('hide');
+        $('.calendar-item-available-slot', this.element).removeClass('calendar-item-previewed');
+    };
+
     CourseCalendar.prototype.setReadonly = function (readonly) {
         var that = this;
         that.readonly = !!readonly;
         that.element.fullCalendar('option', 'selectable', !that.readonly);
         that.element.fullCalendar('option', 'editable', false);
         that.element.fullCalendar('clientEvents', function (ev) {
-            if (ev.courseNumber === null) {
+            if (ev.courseNumber === null && !ev.isAvailableSlot) {
                 ev.editable = !that.readonly;
             }
         });
